@@ -1,14 +1,9 @@
--- STONELAND II - DEDICATED SUPABASE PROJECT ONLY
--- IMPORTANT BOOTSTRAP ORDER:
--- 1. Create the SeWapro administrator in Dashboard > Authentication > Add user.
---    Email: sewapro@stoneland.invalid (internal identifier, never shown to players).
---    Use a STRONG NEW password and mark the email as confirmed.
--- 2. Run this SQL in the new project's SQL Editor.
--- 3. Disable "Confirm email" in Authentication > Providers > Email for
---    username-only registrations. Otherwise new users cannot log in.
--- 4. Copy Project URL and PUBLISHABLE key to config.js.
---
--- Passwords are hashed by Supabase Auth. NEVER put any admin password in GitHub.
+-- STONELAND II — DEDICATED PROJECT (spfpwknvesclrmjcbwce)
+-- Run once to create the application schema with RLS.
+-- Usernames are internal aliases based on @stoneland.invalid.
+-- Admin account is set up separately (see supabase/bootstrap-admin.sql).
+-- Disable Confirm Email through Supabase Auth settings for username-only signup.
+-- NEVER put passwords or service-role keys in source control.
 
 create schema if not exists sl2_private;
 revoke all on schema sl2_private from public, anon, authenticated;
@@ -87,24 +82,6 @@ with check (exists(select 1 from public.sl2_admins where user_id = (select auth.
 drop policy if exists sl2_photos_delete on public.sl2_photos;
 create policy sl2_photos_delete on public.sl2_photos for delete to authenticated
 using (exists(select 1 from public.sl2_admins where user_id = (select auth.uid())));
-
--- Bootstrap admin must exist BEFORE this block runs.
-do $$
-begin
-  if not exists(select 1 from auth.users where lower(email) = 'sewapro@stoneland.invalid') then
-    raise exception 'Create SeWapro Auth user BEFORE applying schema.sql. See README.';
-  end if;
-end $$;
-
--- The profile identifier is derived from the authenticated email, not user_metadata.
-insert into public.sl2_profiles(id,username,created_at)
-select id, lower(split_part(email,'@',1)), created_at from auth.users
-where lower(email) like '%@stoneland.invalid'
-  and lower(split_part(email,'@',1)) ~ '^[a-z][a-z0-9_]{2,19}$'
-on conflict (id) do nothing;
-insert into public.sl2_admins(user_id)
-select id from auth.users where lower(email)='sewapro@stoneland.invalid'
-on conflict(user_id) do nothing;
 
 -- Safe Auth trigger: maintains server-owned usernames and reserves admin login.
 create or replace function sl2_private.on_auth_user_created()
