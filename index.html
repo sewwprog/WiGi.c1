@@ -1,179 +1,84 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#101513" />
-  <meta name="description" content="StoneLand II — імперський портал. Історія, устрій, кодекс і шлях до спільноти." />
-  <meta property="og:title" content="StoneLand II — Імперія" />
-  <meta property="og:description" content="Одна імперія. Багато історій. Стань частиною StoneLand II." />
-  <title>StoneLand II — Імперський портал</title>
-  <link rel="icon" type="image/svg+xml" href="assets/crest.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <script src="app.js" defer></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101b18"><meta name="description" content="StoneLand II — Minecraft спільнота. Новини, галерея, гравці та особистий кабінет.">
+<title>StoneLand II — Minecraft сервер</title>
+<link rel="icon" type="image/svg+xml" href="assets/stone-icon.svg">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1/dist/umd/supabase.min.js" defer></script>
+<script src="app.js" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Перейти до вмісту</a>
-  <div class="grain" aria-hidden="true"></div>
-  <header class="site-header" id="top">
-    <div class="header-shell container">
-      <a href="#top" class="identity" aria-label="StoneLand II — на головну">
-        <img src="assets/crest.svg" alt="" width="40" height="48" />
-        <span class="identity-copy"><strong>STONELAND <i>II</i></strong><small>ІМПЕРСЬКИЙ ПОРТАЛ</small></span>
-      </a>
-      <nav class="desktop-nav" aria-label="Основна навігація">
-        <a href="#empire">Імперія</a>
-        <a href="#structure">Устрій</a>
-        <a href="#chronicle">Хроніка</a>
-        <a href="#codex">Кодекс</a>
-      </nav>
-      <a href="#join" class="nav-cta"><span>Приєднатися</span><span aria-hidden="true">↗</span></a>
-      <button class="menu-button" type="button" aria-label="Відкрити меню" aria-expanded="false" aria-controls="mobile-nav">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-    <nav id="mobile-nav" class="mobile-nav" aria-label="Мобільна навігація" inert>
-      <a href="#empire">Імперія</a>
-      <a href="#structure">Устрій</a>
-      <a href="#chronicle">Хроніка</a>
-      <a href="#codex">Кодекс</a>
-      <a href="#join">Приєднатися <span>↗</span></a>
+<a class="skip" href="#app-main">До вмісту</a>
+<div class="ambient" aria-hidden="true"></div>
+<header class="topbar">
+  <div class="topinner wrap">
+    <a class="brand" href="#home" data-link="home" aria-label="StoneLand II — головна"><img src="assets/stone-icon.svg" width="42" height="42" alt=""><span>STONE<span class="accent">LAND</span><small>II <b>•</b> MINECRAFT WORLD</small></span></a>
+    <nav class="nav" aria-label="Навігація" id="nav">
+      <a href="#home" data-link="home" class="active">Головна</a>
+      <a href="#news" data-link="news">Новини</a>
+      <a href="#gallery" data-link="gallery">Галерея</a>
+      <a href="#community" data-link="community">Спільнота</a>
+      <a href="#account" data-link="account">Кабінет</a>
+      <a href="#admin" data-link="admin" class="admin-nav hidden">Адмінпанель</a>
     </nav>
-  </header>
-
-  <main id="main">
-    <section class="hero" aria-labelledby="hero-title">
-      <div class="hero-glow" aria-hidden="true"></div>
-      <div class="hero-grid container">
-        <div class="hero-content reveal">
-          <div class="eyebrow"><span class="eyebrow-line"></span> СВІТ STONELAND · ДРУГА ЕПОХА</div>
-          <h1 id="hero-title"><span class="hero-title-line">Народжена</span><em>стати легендою.</em></h1>
-          <p class="hero-description">StoneLand II — простір, де спільнота творить власну історію. Традиції, ідеї та люди, які разом будують майбутнє Імперії.</p>
-          <div class="hero-actions">
-            <a class="button button-gold" href="#empire">Відкрити Імперію <span aria-hidden="true">↗</span></a>
-            <a class="button button-ghost" href="#join">Стати частиною <span aria-hidden="true">↓</span></a>
-          </div>
-          <div class="hero-signature"><span class="signature-mark">✦</span><span>Єдність створює спадщину.<br /><strong>StoneLand · II</strong></span></div>
-        </div>
-        <div class="hero-visual reveal" aria-label="Ілюстрація імперської цитаделі">
-          <div class="visual-frame">
-            <img class="fortress" src="assets/fortress.svg" alt="Фантазійна імперська цитадель на скелі під золотим небом" />
-            <div class="visual-vignette"></div>
-            <div class="visual-side-label">IMPERIUM · STONELAND · II</div>
-            <div class="visual-corner"><span>02</span><span>ЕПОХА</span></div>
-          </div>
-          <div class="visual-caption"><span class="caption-rule"></span><span>Майбутнє пишуть ті,<br />хто наважується будувати.</span></div>
-        </div>
-      </div>
-      <div class="hero-bottom container"><div class="scroll-note"><span class="scroll-line"></span> ГОРТАЙ НИЖЧЕ</div><span>01 — 05 / ІМПЕРСЬКИЙ ПОРТАЛ</span></div>
-    </section>
-
-    <div class="separator-banner" aria-label="Гасло Імперії"><span>UNITAS</span><span class="diamond">✦</span><span>HONOR</span><span class="diamond">✦</span><span>LEGATUM</span><span class="diamond">✦</span><span>STONELAND II</span></div>
-
-    <section id="empire" class="section empire-section">
-      <div class="container">
-        <div class="section-heading section-heading-split reveal">
-          <div><div class="section-kicker"><span>01</span> / НАША ІМПЕРІЯ</div><h2>Більше, ніж <em>назва.</em><br />Більше, ніж <em>землі.</em></h2></div>
-          <p>Імперія починається не з кордонів, а з людей, які поділяють цінності та готові разом створювати щось значуще.</p>
-        </div>
-        <div class="values-grid">
-          <article class="value-card reveal"><span class="value-number">I.</span><div class="value-symbol" aria-hidden="true">♜</div><h3>Спадщина</h3><p>Ми поважаємо минуле, зберігаємо здобутки та створюємо історії, які залишаться після нас.</p><span class="value-footer">ПАМ'ЯТЬ І ТРАДИЦІЇ <span>↗</span></span></article>
-          <article class="value-card reveal"><span class="value-number">II.</span><div class="value-symbol" aria-hidden="true">✧</div><h3>Єдність</h3><p>Кожен учасник спільноти має значення. Спільні цілі роблять наші ідеї сильнішими.</p><span class="value-footer">ЛЮДИ І СПІЛЬНОТА <span>↗</span></span></article>
-          <article class="value-card reveal"><span class="value-number">III.</span><div class="value-symbol" aria-hidden="true">⚒</div><h3>Творення</h3><p>Будівництво, культура, дипломатія та відкриття. Тут є місце для різних талантів.</p><span class="value-footer">РОЗВИТОК І МАЙБУТНЄ <span>↗</span></span></article>
-        </div>
-        <div class="creed-strip reveal"><span>НАШ ПРИНЦИП</span><p>Не успадкувати велич. <em>Створити її разом.</em></p><img src="assets/crest.svg" alt="" width="62" height="68" /></div>
-      </div>
-    </section>
-
-    <section id="structure" class="section structure-section">
-      <div class="container">
-        <div class="section-kicker reveal"><span>02</span> / УСТРІЙ</div>
-        <div class="structure-grid">
-          <div class="structure-intro reveal"><h2>Порядок.<br /><em>Честь.</em><br />Єдність.</h2><p>Імперський устрій — символ відповідальності, організації та спільної роботи. Кожна роль важлива для цілого.</p><div class="structure-seal"><img src="assets/crest.svg" alt="" /><span>STONELAND<br />IMPERIUM II</span></div></div>
-          <div class="rank-list" aria-label="Модель устрою Імперії">
-            <article class="rank-row reveal"><span class="rank-count">01</span><span class="rank-icon" aria-hidden="true">♛</span><div><h3>Імперський престол</h3><p>Символ державної єдності та стратегічного бачення.</p></div><span class="rank-arrow">↗</span></article>
-            <article class="rank-row reveal"><span class="rank-count">02</span><span class="rank-icon" aria-hidden="true">◇</span><div><h3>Імперська рада</h3><p>Планування розвитку, ухвалення рішень та координація.</p></div><span class="rank-arrow">↗</span></article>
-            <article class="rank-row reveal"><span class="rank-count">03</span><span class="rank-icon" aria-hidden="true">⚜</span><div><h3>Гільдії та громади</h3><p>Об'єднання за інтересами, проєктами та напрямами.</p></div><span class="rank-arrow">↗</span></article>
-            <article class="rank-row reveal"><span class="rank-count">04</span><span class="rank-icon" aria-hidden="true">✦</span><div><h3>Громадяни Імперії</h3><p>Головна сила спільноти — її люди та їхні ідеї.</p></div><span class="rank-arrow">↗</span></article>
-          </div>
-        </div>
-        <p class="structure-note">* Представлена модель устрою — концепція порталу; назви та повноваження можна змінити відповідно до правил вашої спільноти.</p>
-      </div>
-    </section>
-
-    <section id="chronicle" class="section chronicle-section">
-      <div class="container">
-        <div class="section-heading chronicle-heading reveal"><div><div class="section-kicker"><span>03</span> / ХРОНІКА</div><h2>Кожна епоха<br />має <em>свій голос.</em></h2></div><span class="chronicle-side">ЛІТОПИС ІМПЕРІЇ / VOL. II</span></div>
-        <div class="chronicle-layout">
-          <div class="era-tabs reveal" role="tablist" aria-label="Розділи хроніки">
-            <button type="button" class="era-tab is-active" id="tab-origin" role="tab" aria-controls="panel-origin" aria-selected="true" data-target="origin"><span>01</span><strong>Початок</strong><span aria-hidden="true">↗</span></button>
-            <button type="button" class="era-tab" id="tab-present" role="tab" aria-controls="panel-present" aria-selected="false" tabindex="-1" data-target="present"><span>02</span><strong>Сьогодення</strong><span aria-hidden="true">↗</span></button>
-            <button type="button" class="era-tab" id="tab-future" role="tab" aria-controls="panel-future" aria-selected="false" tabindex="-1" data-target="future"><span>03</span><strong>Майбутнє</strong><span aria-hidden="true">↗</span></button>
-          </div>
-          <div class="era-display reveal">
-            <article class="era-panel" id="panel-origin" role="tabpanel" aria-labelledby="tab-origin" data-panel="origin">
-              <div class="era-overline">РОЗДІЛ ПЕРШИЙ / ВИТОКИ</div><span class="era-roman">I</span><h3>Усе починається з ідеї.</h3><p>Кожна велика історія має першу сторінку. Для StoneLand II це — прагнення об'єднати однодумців навколо власного світу та спільного задуму.</p><span class="era-end">ПЕРША СТОРІНКА ЛІТОПИСУ <b>✧</b></span>
-            </article>
-            <article class="era-panel" id="panel-present" role="tabpanel" aria-labelledby="tab-present" data-panel="present" hidden>
-              <div class="era-overline">РОЗДІЛ ДРУГИЙ / СТАНОВЛЕННЯ</div><span class="era-roman">II</span><h3>Історія пишеться сьогодні.</h3><p>Ідеї стають проєктами, знайомства — союзами, а кожен новий день додає до хроніки Імперії власні події та досягнення.</p><span class="era-end">МИ ТВОРИМО ЦЕ РАЗОМ <b>✧</b></span>
-            </article>
-            <article class="era-panel" id="panel-future" role="tabpanel" aria-labelledby="tab-future" data-panel="future" hidden>
-              <div class="era-overline">РОЗДІЛ ТРЕТІЙ / ГОРИЗОНТИ</div><span class="era-roman">III</span><h3>Попереду — нові сторінки.</h3><p>Розвиток спільноти, нові ініціативи, архітектурні проєкти та події. Якою буде наступна епоха, залежить від тих, хто приєднається.</p><span class="era-end">МАЙБУТНЄ ЩЕ НЕ НАПИСАНЕ <b>✧</b></span>
-            </article>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="codex" class="section codex-section">
-      <div class="container">
-        <div class="codex-top reveal"><div class="section-kicker"><span>04</span> / КОДЕКС</div><h2>Слова, на яких<br />тримається <em>довіра.</em></h2><p>Чотири принципи, які формують характер спільноти. Це ціннісні орієнтири, а не опубліковані правила сервера.</p></div>
-        <div class="codex-grid">
-          <article class="codex-item reveal"><span>01 / ПОВАГА</span><h3>Шануй інших.</h3><p>Взаємна повага — основа спілкування й співпраці.</p></article>
-          <article class="codex-item reveal"><span>02 / ВІДПОВІДАЛЬНІСТЬ</span><h3>Тримай слово.</h3><p>Довіра народжується там, де обіцянки мають значення.</p></article>
-          <article class="codex-item reveal"><span>03 / СПРАВЕДЛИВІСТЬ</span><h3>Дій чесно.</h3><p>Спільні правила мають працювати однаково для всіх.</p></article>
-          <article class="codex-item reveal"><span>04 / СПІВПРАЦЯ</span><h3>Твори разом.</h3><p>Підтримуй ідеї, допомагай розвивати спільні проєкти.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section id="join" class="section join-section">
-      <div class="container">
-        <div class="join-wrap">
-          <div class="join-copy reveal"><div class="section-kicker light"><span>05</span> / ТВОЯ ІСТОРІЯ</div><h2>Твоє місце<br /><em>в історії.</em></h2><p>Маєш ідеї, хочеш будувати, досліджувати чи розвивати спільноту? Підготуй коротку заявку на вступ до Імперії.</p><div class="join-decoration"><img src="assets/crest.svg" alt="" /><span>THE NEXT CHAPTER<br />STARTS WITH YOU</span></div></div>
-          <form id="join-form" class="join-form reveal">
-            <div class="form-heading"><span>ЗАЯВКА НА ВСТУП</span><span>SL / 002</span></div>
-            <label for="nickname">Твій нікнейм <span>*</span></label>
-            <input id="nickname" name="nickname" type="text" autocomplete="nickname" maxlength="32" minlength="2" placeholder="Наприклад, StoneBuilder" required />
-            <label for="interest">Твій напрям <span>*</span></label>
-            <select id="interest" name="interest" required>
-              <option value="" disabled selected>Обери напрям діяльності</option>
-              <option value="Будівництво та архітектура">Будівництво та архітектура</option>
-              <option value="Дипломатія та управління">Дипломатія та управління</option>
-              <option value="Дослідження світу">Дослідження світу</option>
-              <option value="Культура та події">Культура та події</option>
-              <option value="Життя спільноти">Життя спільноти</option>
-            </select>
-            <label for="motivation">Кілька слів про себе <span class="optional">НЕОБОВ'ЯЗКОВО</span></label>
-            <textarea id="motivation" name="motivation" maxlength="500" rows="3" placeholder="Чим хочеш займатися в Імперії?"></textarea>
-            <button class="button button-dark" type="submit">Скопіювати заявку <span aria-hidden="true">↗</span></button>
-            <div id="form-feedback" class="form-feedback" role="status" aria-live="polite"></div>
-            <p class="form-disclaimer">Заявка не надсилається автоматично. Після копіювання передай її представнику Імперії через ваш офіційний канал зв'язку. Дані на сайт не завантажуються.</p>
-          </form>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container footer-main">
-      <div><a class="footer-brand" href="#top"><img src="assets/crest.svg" alt="" width="42" height="52" /> STONELAND <em>II</em></a><p>Імперія, історію якої творять люди.</p></div>
-      <div class="footer-links"><a href="#empire">Імперія</a><a href="#structure">Устрій</a><a href="#chronicle">Хроніка</a><a href="#codex">Кодекс</a><a href="#join">Вступ</a></div>
+    <div class="actions"><button class="account-button" id="account-button" type="button"><span class="account-dot"></span><span id="account-label">Увійти</span><span class="arrow">↗</span></button><button class="menu-button" type="button" id="menu-button" aria-label="Відкрити меню" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button></div>
+  </div>
+</header>
+<main class="wrap main" id="app-main">
+ <section class="page" data-page="home" id="home">
+   <div class="hero">
+     <div class="hero-copy"><p class="eyebrow"><span class="square-pulse"></span> STONELAND II / НОВИЙ СВІТ</p><h1>Твоя історія.<br><span>Твій світ.</span></h1><p class="lead">Будуй міста, досліджуй світ та знаходь друзів. StoneLand II — місце, де кожен блок стає частиною великої історії.</p>
+     <div class="hero-buttons"><button class="btn primary" type="button" data-go="news">Дізнатись новини <span>→</span></button><button class="btn secondary" type="button" data-go="account">Створити акаунт <span>↗</span></button></div>
+     <div class="hero-info"><span class="status-indicator"></span><span>СВІТ ВІДКРИТИЙ ДЛЯ НОВИХ ІСТОРІЙ</span></div>
+     </div>
+     <div class="hero-art"><img src="assets/pixel-world.svg" alt="Піксельний ландшафт Minecraft: трава, гори й фортеця"><div class="art-label"><b>STONELAND</b><span>WORLD II / PIXEL EDITION</span></div></div>
+   </div>
+   <div class="section-bar"><div><span class="kicker">ЗНАЙОМСТВО</span><h2>Що є у нашому світі</h2></div><span class="tiny">ОБИРАЙ СВОЮ ПРИГОДУ <b>✦</b></span></div>
+   <div class="feature-grid"><button class="feature" type="button" data-go="news"><div class="feature-emoji">▦</div><span>01 / ПОДІЇ</span><h3>Новини сервера</h3><p>Важливі повідомлення, зміни та історії зі світу StoneLand.</p><strong>Переглянути →</strong></button><button class="feature" type="button" data-go="gallery"><div class="feature-emoji">▧</div><span>02 / КРАЄВИДИ</span><h3>Галерея світу</h3><p>Знімки будівель, природи й незабутніх моментів спільноти.</p><strong>Відкрити →</strong></button><button class="feature" type="button" data-go="community"><div class="feature-emoji">♟</div><span>03 / ГРАВЦІ</span><h3>Наша спільнота</h3><p>Познайомся з мешканцями світу та стань одним із них.</p><strong>Дивитися →</strong></button></div>
+   <div class="banner"><div><span class="kicker">НОВА ГЛАВА</span><h2>Світ стає кращим разом із тобою.</h2><p>Почни зі створення акаунта — пошта для реєстрації не потрібна.</p></div><button type="button" class="btn primary" data-go="account">Приєднатись <span>→</span></button></div>
+ </section>
+ <section class="page hidden" data-page="news" id="news">
+  <div class="page-heading"><div><span class="kicker">СТРІЧКА СЕРВЕРА / 01</span><h1>Новини <span>StoneLand</span></h1><p>Оголошення, оновлення й усе важливе зі світу сервера.</p></div><span class="page-glyph" aria-hidden="true">▦</span></div>
+  <div id="news-list" class="news-grid"><div class="empty"><span>▦</span><h3>Новин поки немає</h3><p>Перші публікації з'являться тут після підключення бази.</p></div></div>
+ </section>
+ <section class="page hidden" data-page="gallery" id="gallery">
+  <div class="page-heading"><div><span class="kicker">СВІТ У КАДРАХ / 02</span><h1>Фото <span>& галерея</span></h1><p>Найкращі моменти, будівлі та локації StoneLand II.</p></div><span class="page-glyph" aria-hidden="true">▧</span></div>
+  <div id="gallery-list" class="gallery-grid"><div class="empty"><span>▧</span><h3>Поки немає знімків</h3><p>Адміністратор зможе додати перші фото з Minecraft.</p></div></div>
+ </section>
+ <section class="page hidden" data-page="community" id="community">
+  <div class="page-heading"><div><span class="kicker">НАШІ ЛЮДИ / 03</span><h1>Спільнота <span>гравців</span></h1><p>Гравці, що творять історію світу StoneLand II.</p></div><span class="page-glyph" aria-hidden="true">♟</span></div>
+  <div class="community-head"><span class="status-indicator"></span><span id="member-count">Завантаження учасників...</span></div>
+  <div id="member-list" class="members-grid"></div>
+ </section>
+ <section class="page hidden" data-page="account" id="account">
+   <div class="page-heading"><div><span class="kicker">ОСОБИСТИЙ ПРОСТІР / 04</span><h1>Твій <span>кабінет</span></h1><p>Керуй своїм профілем, входь у світ і залишайся на зв'язку.</p></div><span class="page-glyph" aria-hidden="true">◈</span></div>
+   <div class="account-grid" id="logged-out">
+     <div class="auth-aside"><div class="pixel-avatar big">S</div><h2>Ласкаво просимо<br>до StoneLand II.</h2><p>Один акаунт — твій особистий простір у спільноті. Для входу достатньо логіна й пароля.</p><div class="auth-check">✓ Без введення електронної пошти</div><div class="auth-check">✓ Збереження сесії після входу</div><div class="auth-check">✓ Захищені права адміністратора</div></div>
+     <div class="auth-panel"><div class="auth-tabs" role="tablist" aria-label="Тип авторизації"><button class="selected" role="tab" type="button" id="signin-tab" data-auth-tab="signin" aria-selected="true">Увійти</button><button role="tab" type="button" id="signup-tab" data-auth-tab="signup" aria-selected="false">Реєстрація</button></div><h2 id="auth-title">Повернення у світ</h2><p class="subline" id="auth-subtitle">Введи свій логін і пароль.</p>
+       <form id="auth-form"><label for="username">Логін гравця</label><input id="username" name="username" type="text" autocomplete="username" placeholder="Твій Minecraft нікнейм" minlength="3" maxlength="20" pattern="[A-Za-z][A-Za-z0-9_]{2,19}" required><small class="input-note">3–20 символів: латинські букви, цифри, _</small><label for="password">Пароль</label><div class="password-box"><input type="password" id="password" name="password" autocomplete="current-password" placeholder="Введи пароль" minlength="8" maxlength="128" required><button id="show-password" type="button" aria-label="Показати пароль">◉</button></div><label for="confirm-password" id="confirm-label" class="hidden">Повтори пароль</label><input class="hidden" type="password" id="confirm-password" name="confirm-password" autocomplete="new-password" placeholder="Повтори пароль" minlength="8" maxlength="128"><button id="auth-submit" class="btn primary wide" type="submit">Увійти <span>→</span></button><p id="auth-message" class="message" role="status" aria-live="polite"></p></form><p class="auth-footnote">Не використовуй той самий пароль, що й для важливих акаунтів. Без прив'язаної пошти відновлення забутого пароля потребує допомоги адміністратора.</p>
+     </div>
+   </div>
+   <div id="logged-in" class="hidden profile-layout"><div class="profile-card"><div class="profile-cover"><span>STONELAND II</span></div><div class="profile-info"><div class="pixel-avatar" id="profile-avatar">S</div><h2 id="profile-username">Гравець</h2><span id="profile-role" class="role-chip">Гравець</span><p>Мешканець імперії StoneLand II</p><div class="profile-controls"><button id="open-admin" type="button" class="btn primary hidden">Адмінпанель <span>↗</span></button><button id="logout" type="button" class="btn secondary">Вийти <span>→</span></button></div></div></div><div class="profile-aside"><span class="kicker">ПРОФІЛЬ / АКТИВНИЙ</span><h3>Твоя пригода вже почалася.</h3><p>Твій акаунт підключено. Повертайся за новинами, переглядай фотографії й знайомся з гравцями.</p><button type="button" class="text-link" data-go="community">Перейти до спільноти →</button></div></div>
+ </section>
+ <section class="page hidden" data-page="admin" id="admin">
+  <div class="page-heading"><div><span class="kicker">ЦЕНТР КЕРУВАННЯ / ADMIN</span><h1>Панель <span>адміністратора</span></h1><p>Керування публікаціями та фотографіями StoneLand II.</p></div><span class="page-glyph" aria-hidden="true">⚙</span></div>
+  <div id="admin-guard" class="empty"><span>⬡</span><h3>Доступ обмежено</h3><p>Увійди в акаунт з правами адміністратора.</p><button class="btn primary" data-go="account" type="button">Увійти →</button></div>
+  <div id="admin-content" class="hidden">
+    <div class="admin-tabs"><button type="button" class="selected" data-admin-tab="posts">Новини</button><button type="button" data-admin-tab="photos">Галерея</button></div>
+    <div class="admin-panel" data-admin-panel="posts">
+      <div class="admin-head"><h2>Додати новину</h2><p>Опублікуй оголошення для всіх гравців.</p></div>
+      <form id="news-form" class="stack"><label>Заголовок<input name="title" maxlength="100" required placeholder="Що нового у світі?"></label><label>Текст новини<textarea name="body" maxlength="5000" rows="6" required placeholder="Напиши текст новини..."></textarea></label><button class="btn primary" type="submit">Опублікувати <span>↗</span></button><p class="message" id="news-message" role="status"></p></form><div class="admin-list-head"><h3>Опубліковані новини</h3></div><div id="manage-posts" class="manage-list"></div>
     </div>
-    <div class="container footer-bottom"><span>© <span id="year">2026</span> StoneLand II. Сайт спільноти.</span><span>UNITAS · HONOR · LEGATUM</span><a href="#top">НАГОРУ ↑</a></div>
-  </footer>
-</body>
-</html>
+    <div class="admin-panel hidden" data-admin-panel="photos">
+      <div class="admin-head"><h2>Додати фото</h2><p>Завантаж скріншот із гри до галереї.</p></div>
+      <form id="photo-form" class="stack"><label>Назва фото<input name="title" maxlength="100" required placeholder="Наприклад, Наша столиця"></label><label>Фото (JPEG, PNG або WebP до 5 МБ)<input name="photo" id="photo-file" type="file" accept="image/jpeg,image/png,image/webp" required></label><button class="btn primary" type="submit">Завантажити <span>↗</span></button><p class="message" id="photo-message" role="status"></p></form><div class="admin-list-head"><h3>Фото у галереї</h3></div><div id="manage-photos" class="manage-list"></div>
+    </div>
+  </div>
+ </section>
+</main>
+<footer class="footer"><div class="wrap"><div><img src="assets/stone-icon.svg" alt="" width="34"><span>STONELAND <b>II</b></span></div><span>Місце, де починаються твої пригоди.</span><span>© <span id="year">2026</span> StoneLand II</span></div></footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body></html>
