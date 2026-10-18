@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 1040" role="img" aria-label="Цитадель StoneLand II">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2=".25" y2="1"><stop stop-color="#1C2525"/><stop offset=".43" stop-color="#4F493A"/><stop offset=".76" stop-color="#9D7853"/><stop offset="1" stop-color="#243128"/></linearGradient>
+  <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop stop-color="#E5BE7A" stop-opacity=".72"/><stop offset=".47" stop-color="#CE9C59" stop-opacity=".27"/><stop offset="1" stop-color="#D1A161" stop-opacity="0"/></radialGradient>
+  <linearGradient id="mountain" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#5E5B4C"/><stop offset="1" stop-color="#202B27"/></linearGradient>
+  <linearGradient id="stone" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5E6050"/><stop offset=".52" stop-color="#343D35"/><stop offset="1" stop-color="#202D29"/></linearGradient>
+  <linearGradient id="stoneLit" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#77705A"/><stop offset="1" stop-color="#343D37"/></linearGradient>
+  <linearGradient id="cliff" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#3D453A"/><stop offset="1" stop-color="#0C1718"/></linearGradient>
+  <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#D7AB6F" stop-opacity="0"/><stop offset=".65" stop-color="#DAB47C" stop-opacity=".09"/><stop offset="1" stop-color="#090F11" stop-opacity=".88"/></linearGradient>
+  <pattern id="bricks" patternUnits="userSpaceOnUse" width="66" height="29"><path d="M0 0H66M0 29H66M0 0V14M33 14V29M66 0V14" stroke="#C5B489" stroke-opacity=".13" stroke-width="1"/></pattern>
+  <filter id="blur"><feGaussianBlur stdDeviation="28"/></filter>
+</defs>
+<rect width="840" height="1040" fill="url(#sky)"/>
+<path d="M0 0H840V1040H0Z" fill="#0D1415" opacity=".2"/>
+<circle cx="438" cy="372" r="354" fill="url(#halo)"/>
+<circle cx="439" cy="386" r="190" fill="#E5BD7A" opacity=".21"/>
+<circle cx="439" cy="386" r="187" fill="none" stroke="#F3D29A" stroke-opacity=".23"/>
+<circle cx="439" cy="386" r="228" fill="none" stroke="#F3D29A" stroke-opacity=".10"/>
+<path d="M0 545 70 481 119 520 178 434 234 481 308 378 376 451 466 370 538 438 600 407 670 476 734 405 840 505V1040H0Z" fill="#343B33" opacity=".5"/>
+<path d="M0 615 107 519 181 575 275 482 350 533 475 462 579 525 674 472 774 553 840 512V1040H0Z" fill="url(#mountain)" opacity=".64"/>
+<path d="M0 673 113 595 207 642 298 561 369 611 455 548 570 627 667 549 750 632 840 580V1040H0Z" fill="#25332D" opacity=".8"/>
+<path d="M0 705C140 656 191 683 282 659S475 659 552 673 733 657 840 690V1040H0Z" fill="#1F2C29"/>
+<path d="M0 764C140 728 244 739 335 723S604 741 840 709V1040H0Z" fill="#142420"/>
+<g opacity=".42" fill="#DBB67C"><circle cx="95" cy="150" r="1.7"/><circle cx="180" cy="256" r="1.4"/><circle cx="667" cy="165" r="1.8"/><circle cx="750" cy="313" r="1.2"/><circle cx="265" cy="111" r="1.1"/><circle cx="524" cy="94" r="1.5"/><circle cx="720" cy="87" r="1"/></g>
+<!-- distant citadel shadow -->
+<path d="M210 696 210 467 236 450 236 427 261 427 261 455 287 474V694M549 689V460L576 446V419H601V446L629 463V697" fill="#26342C" stroke="#161F1B" stroke-width="6"/>
+<path d="M130 782 189 751 226 752 250 722 307 713 335 691 501 687 531 709 580 718 625 748 674 743 742 789 806 816 840 840V1040H0V849Z" fill="url(#cliff)"/>
+<path d="m130 782 60-31 50 2 42-35 54-17 164-2 40 21 65 15 54 36 51-6 94 51" fill="none" stroke="#9D8F67" stroke-opacity=".34" stroke-width="7"/>
+<path d="M160 795 205 870 238 898 225 997M285 752 315 832 301 903 321 985M540 745 523 830 552 910 534 1040M700 805 665 880 694 926 671 1040" stroke="#889078" stroke-opacity=".16" stroke-width="8" fill="none"/>
+<!-- outlying wall and ramparts -->
+<path d="M171 675H684V777H171Z" fill="url(#stone)"/>
+<path d="M171 675H684V777H171Z" fill="url(#bricks)"/>
+<path d="M166 666h38v-14h22v14h31v-14h22v14h31v-14h22v14h31v-14h22v14h31v-14h22v14h31v-14h22v14h31v-14h22v14h31v-14h22v14h31v-14h22v14h34v21H166Z" fill="#4C5344" stroke="#9E906E" stroke-opacity=".45"/>
+<!-- left outer tower -->
+<path d="M181 403H287V754H181Z" fill="url(#stoneLit)" stroke="#978566" stroke-width="3"/>
+<path d="M181 403H287V754H181Z" fill="url(#bricks)"/>
+<path d="M166 402h25v-26h20v26h25v-26h20v26h25v-26h19v47H166Z" fill="#555B4D" stroke="#A79670" stroke-width="2"/>
+<path d="M177 365 235 283 294 365Z" fill="#26332E" stroke="#BE9F72" stroke-width="3"/>
+<path d="M235 283V244" stroke="#B79E6E" stroke-width="3"/>
+<path d="M235 246 263 252 235 263Z" fill="#B98A57"/>
+<!-- right outer tower -->
+<path d="M556 400H662V761H556Z" fill="url(#stoneLit)" stroke="#978566" stroke-width="3"/>
+<path d="M556 400H662V761H556Z" fill="url(#bricks)"/>
+<path d="M541 400h24v-26h20v26h25v-26h20v26h22v-26h20v47H541Z" fill="#555B4D" stroke="#A79670" stroke-width="2"/>
+<path d="M552 363 609 283 665 363Z" fill="#26332E" stroke="#BE9F72" stroke-width="3"/>
+<path d="M609 283V244" stroke="#B79E6E" stroke-width="3"/>
+<path d="M609 246 636 253 609 263Z" fill="#B98A57"/>
+<!-- keep -->
+<path d="M284 477H558V762H284Z" fill="url(#stone)" stroke="#AB9775" stroke-width="3"/>
+<path d="M284 477H558V762H284Z" fill="url(#bricks)"/>
+<path d="M279 470h33v-23h22v23h35v-23h22v23h35v-23h22v23h35v-23h22v23h28v-23h22v23h28v31H279Z" fill="#646552" stroke="#C1AA80" stroke-width="2"/>
+<path d="M338 467V372H511V467" fill="url(#stoneLit)" stroke="#9F8D70" stroke-width="3"/>
+<path d="M334 372h18v-20h19v20h19v-20h19v20h19v-20h19v20h19v-20h19v20h23v25H334Z" fill="#595D4E" stroke="#B8A47E" stroke-width="2"/>
+<!-- central main spire -->
+<path d="M383 354V254H457V354Z" fill="#525C50" stroke="#B89F72" stroke-width="3"/>
+<path d="M382 255 420 166 458 255Z" fill="#26352F" stroke="#D0AF7D" stroke-width="3"/>
+<path d="M420 166v-52" stroke="#D1B88D" stroke-width="3"/>
+<path d="m420 116 51 10-51 22Z" fill="#CE9B61"/>
+<circle cx="420" cy="220" r="7" fill="#E8C38C"/>
+<rect x="404" y="281" width="32" height="53" rx="16" fill="#131F1C" stroke="#A38F6A"/>
+<rect x="406" y="283" width="28" height="49" rx="14" fill="#E5AF69" opacity=".38"/>
+<!-- illuminated windows -->
+<g fill="#DBAD72" opacity=".83">
+<path d="M210 464a14 14 0 0 1 28 0v48h-28Z"/><path d="M240 564a12 12 0 0 1 24 0v44h-24Z"/>
+<path d="M583 462a14 14 0 0 1 28 0v48h-28Z"/><path d="M613 567a12 12 0 0 1 24 0v44h-24Z"/>
+<path d="M362 419a11 11 0 0 1 22 0v35h-22Z"/><path d="M468 419a11 11 0 0 1 22 0v35h-22Z"/>
+<path d="M326 557a14 14 0 0 1 28 0v49h-28Z"/><path d="M487 557a14 14 0 0 1 28 0v49h-28Z"/>
+</g>
+<g fill="#1C2823" opacity=".5"><path d="M222 451v61M252 552v56M597 449v61M625 555v53M373 408v46M479 408v46M340 543v63M501 543v63" stroke="#19241E" stroke-width="3"/></g>
+<!-- grand entrance -->
+<path d="M382 763V676C382 651 400 633 421 633S460 651 460 676V763Z" fill="#151F1C" stroke="#B99A69" stroke-width="5"/>
+<path d="M399 760v-83c0-15 8-26 21-29M441 760v-83c0-15-8-26-21-29" fill="none" stroke="#927652" stroke-opacity=".5" stroke-width="3"/>
+<path d="M386 713H456M385 743H457" stroke="#B99A69" stroke-opacity=".38" stroke-width="3"/>
+<!-- foreground cypress -->
+<g fill="#13231E"><path d="m80 960 35-208 39 208Z"/><path d="m92 853 23-172 28 172Z"/><path d="m688 974 39-227 41 227Z"/><path d="m700 849 27-173 27 173Z"/><path d="m767 1002 23-154 23 154Z"/></g>
+<g opacity=".2" fill="#BDA77E"><ellipse cx="406" cy="801" rx="330" ry="43" filter="url(#blur)"/></g>
+<rect width="840" height="1040" fill="url(#mist)"/>
+<path d="M0 0H840V1040H0Z" fill="none" stroke="#B98C54" stroke-opacity=".15" stroke-width="16"/>
+</svg>
