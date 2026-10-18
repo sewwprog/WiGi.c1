@@ -9,6 +9,6 @@
  * or any other private credentials in this file.
  */
 window.STONELAND_CONFIG = {
-  supabaseUrl: "",
-  supabaseKey: ""
+  supabaseUrl: "https://spfpwknvesclrmjcbwce.supabase.co",
+  supabaseKey: "sb_publishable_tafzo7TyDBKTgBk-OQfGOw_lFNL-kKX"
 };
