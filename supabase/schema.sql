@@ -44,8 +44,13 @@ alter table public.sl2_photos enable row level security;
 grant usage on schema public to anon, authenticated;
 grant select on public.sl2_profiles, public.sl2_posts, public.sl2_photos to anon, authenticated;
 grant select on public.sl2_admins to authenticated;
+-- Defense in depth: remove data-writing privileges from visitors as well as RLS.
+revoke insert, update, delete, truncate, references, trigger
+  on public.sl2_profiles, public.sl2_admins, public.sl2_posts, public.sl2_photos
+  from public, anon;
+revoke insert, update, delete, truncate, references, trigger
+  on public.sl2_profiles, public.sl2_admins from authenticated;
 grant insert, update, delete on public.sl2_posts, public.sl2_photos to authenticated;
-revoke insert, update, delete on public.sl2_profiles, public.sl2_admins from anon, authenticated;
 
 drop policy if exists sl2_profiles_read on public.sl2_profiles;
 create policy sl2_profiles_read on public.sl2_profiles for select to anon, authenticated using (true);
