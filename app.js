@@ -40,11 +40,24 @@ $("#auth-form").addEventListener("submit",async(e)=>{e.preventDefault();if(!sb){
  if(authMode==="signup" && handle.toLowerCase()==="sewapro"){report("#auth-message","Цей логін зарезервовано.",true);return;}
  if(authMode==="signup" && password!==form.elements["confirm-password"].value){report("#auth-message","Паролі не збігаються.",true);return;}
  const btn=$("#auth-submit");btn.disabled=true;report("#auth-message","Зачекай, перевіряємо дані...");
- try {const response=authMode==="signup"?await sb.auth.signUp({email:emailFor(handle),password}):await sb.auth.signInWithPassword({email:emailFor(handle),password});
+ try {
+ let response;
+ if(authMode==="signup"){
+   const created=await fetch(cfg.supabaseUrl+"/functions/v1/sl2-register",{
+     method:"POST",
+     headers:{"Content-Type":"application/json",apikey:cfg.supabaseKey},
+     body:JSON.stringify({username:handle,password})
+   });
+   const payload=await created.json().catch(()=>({}));
+   if(!created.ok)throw new Error(payload.error||"Помилка реєстрації.");
+   response=await sb.auth.signInWithPassword({email:emailFor(handle),password});
+ }else{
+   response=await sb.auth.signInWithPassword({email:emailFor(handle),password});
+ }
  if(response.error)throw response.error;
- if(!response.data.session){report("#auth-message","Підтвердження пошти увімкнене в Supabase. Вимкни Confirm email у налаштуваннях Authentication.",true);return;}
+ if(!response.data.session){report("#auth-message","Не вдалося створити сесію. Спробуй увійти ще раз.",true);return;}
  await refreshAccount();form.reset();report("#auth-message","");notify(authMode==="signup"?"Акаунт створено. Вітаємо у StoneLand II!":"Вхід виконано!");
- }catch(err){const msg=String(err?.message||"");report("#auth-message",/already registered/i.test(msg)?"Цей логін уже зайнятий.":/invalid login credentials/i.test(msg)?"Неправильний логін або пароль.":/rate limit|too many/i.test(msg)?"Забагато спроб. Спробуй пізніше.":"Не вдалося виконати дію. Перевір дані та підключення.",true)}finally{btn.disabled=false}
+ }catch(err){const msg=String(err?.message||"");report("#auth-message",/already registered/i.test(msg)?"Цей логін уже зайнятий.":/invalid login credentials/i.test(msg)?"Неправильний логін або пароль.":/rate limit|too many/i.test(msg)?"Забагато спроб. Спробуй пізніше.":/зайнятий|зарезервовано|передбачуваний|Забагато спроб|Некоректний логін|Пароль має містити/i.test(msg)?msg:"Не вдалося виконати дію. Перевір дані та підключення.",true)}finally{btn.disabled=false}
 });
 function renderPosts(){const list=$("#news-list"),manage=$("#manage-posts");list.replaceChildren();manage.replaceChildren();
 if(!posts.length){const empty=el("div","empty");empty.append(el("span","","▦"),el("h3","","Новин поки немає"),el("p","","Слідкуй за оновленнями StoneLand II."));list.append(empty);}
