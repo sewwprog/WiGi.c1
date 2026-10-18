@@ -44,8 +44,13 @@ Deno.serve(async (req) => {
     if (!/^[a-z][a-z0-9_]{2,19}$/.test(nickname)) {
       return json(400, { error: "Некоректний логін." }, origin);
     }
-    if (nickname === "sewapro") {
-      return json(403, { error: "Цей логін зарезервовано." }, origin);
+    const isInitialAdmin = nickname === "sewapro";
+    const activationCode = String(payload.activationCode || "").trim().toLowerCase();
+    if (isInitialAdmin && !/^[0-9a-f]{48}$/.test(activationCode)) {
+      return json(403, { error: "Для SeWapro потрібен код активації." }, origin);
+    }
+    if (isInitialAdmin && password.length < 12) {
+      return json(400, { error: "Для адміністратора потрібен пароль від 12 символів." }, origin);
     }
     if (password.length < 8 || password.length > 128) {
       return json(400, { error: "Пароль має містити від 8 до 128 символів." }, origin);
@@ -68,17 +73,25 @@ Deno.serve(async (req) => {
     }
     if (!allowed) return json(429, { error: "Забагато спроб реєстрації. Спробуй пізніше." }, origin);
 
-    const { error } = await db.auth.admin.createUser({
+    const { data, error } = await db.auth.admin.createUser({
       email: nickname + "@stoneland.invalid",
       password,
-      email_confirm: true
+      email_confirm: true,
+      ...(isInitialAdmin ? { user_metadata: { sl2_activation: activationCode } } : {})
     });
     if (error) {
+      if (isInitialAdmin && /database error|activation|reserved/i.test(error.message || "")) {
+        return json(403, { error: "Код активації неправильний, уже використаний або прострочений." }, origin);
+      }
       if (/already registered|already exists|duplicate/i.test(error.message || "")) {
         return json(409, { error: "Цей логін уже зайнятий." }, origin);
       }
       console.error("User registration failed", error.status, error.code);
       return json(400, { error: "Не вдалося створити акаунт. Спробуй інший логін чи пароль." }, origin);
+    }
+    // Once consumed in the insert trigger, clear the one-time code from Auth user metadata.
+    if (isInitialAdmin && data?.user?.id) {
+      await db.auth.admin.updateUserById(data.user.id, { user_metadata: {} });
     }
     return json(201, { ok: true }, origin);
   } catch (e) {
