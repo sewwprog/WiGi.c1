@@ -112,7 +112,7 @@ returns trigger language plpgsql security definer set search_path = ''
 as $$
 declare nick text;
 begin
-  if new.email is null or right(lower(new.email),20) <> '@stoneland.invalid' then
+  if new.email is null or lower(new.email) not like '%@stoneland.invalid' then
     return new;
   end if;
   nick := lower(split_part(new.email,'@',1));
