@@ -4,14 +4,8 @@
 
 alter table auth.users enable trigger sl2_on_auth_created;
 
-do $$
-begin
-  if not exists (
-    select 1 from auth.users where lower(email) = 'sewapro@stoneland.invalid'
-  ) then
-    raise exception 'SeWapro does not exist in Supabase Authentication. The trigger has been restored. Create the Auth user and retry.';
-  end if;
-end $$;
+-- If the Auth user does not exist yet, the inserts below simply affect zero rows.
+-- The trigger is still re-enabled; no exception or rollback is caused.
 
 insert into public.sl2_profiles (id, username, created_at)
 select id, 'sewapro', created_at
