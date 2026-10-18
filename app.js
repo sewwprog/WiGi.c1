@@ -27,8 +27,10 @@ $("#account-button").addEventListener("click",()=>go("account"));
 $("#menu-button").addEventListener("click",()=>{const menu=$("#nav");const open=menu.classList.toggle("open");$("#menu-button").setAttribute("aria-expanded",String(open));$("#menu-button").setAttribute("aria-label",open?"Закрити меню":"Відкрити меню")});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("#nav").classList.remove("open");$("#menu-button").setAttribute("aria-expanded","false")}});
 $("#year").textContent=String(new Date().getFullYear());
-function authTab(mode){authMode=mode;$$("[data-auth-tab]").forEach(btn=>{const active=btn.dataset.authTab===mode;btn.classList.toggle("selected",active);btn.setAttribute("aria-selected",String(active))});const reg=mode==="signup";$("#auth-title").textContent=reg?"Новий гравець":"Повернення у світ";$("#auth-subtitle").textContent=reg?"Створи акаунт без пошти.":"Введи свій логін і пароль.";$("#auth-submit").firstChild.textContent=reg?"Зареєструватись ":"Увійти ";$("#confirm-label").classList.toggle("hidden",!reg);$("#confirm-password").classList.toggle("hidden",!reg);$("#confirm-password").required=reg;$("#password").autocomplete=reg?"new-password":"current-password";report("#auth-message","")}
-$$("[data-auth-tab]").forEach(b=>b.addEventListener("click",()=>authTab(b.dataset.authTab)));
+function authTab(mode){authMode=mode;$$("[data-auth-tab]").forEach(btn=>{const active=btn.dataset.authTab===mode;btn.classList.toggle("selected",active);btn.setAttribute("aria-selected",String(active))});const reg=mode==="signup";$("#auth-title").textContent=reg?"Новий гравець":"Повернення у світ";$("#auth-subtitle").textContent=reg?"Створи акаунт без пошти.":"Введи свій логін і пароль.";$("#auth-submit").firstChild.textContent=reg?"Зареєструватись ":"Увійти ";$("#confirm-label").classList.toggle("hidden",!reg);$("#confirm-password").classList.toggle("hidden",!reg);$("#confirm-password").required=reg;$("#password").autocomplete=reg?"new-password":"current-password";syncAdminCode();report("#auth-message","")}
+function syncAdminCode(){const needed=authMode==="signup"&&$("#username").value.trim().toLowerCase()==="sewapro";$("#admin-code-label").classList.toggle("hidden",!needed);$("#admin-code").classList.toggle("hidden",!needed);$("#admin-code").required=needed;$("#password").minLength=needed?12:8;$("#confirm-password").minLength=needed?12:8;}
+$("#username").addEventListener("input",syncAdminCode);
+$("[data-auth-tab]").forEach(b=>b.addEventListener("click",()=>authTab(b.dataset.authTab)));
 $("#show-password").addEventListener("click",()=>{const p=$("#password");p.type=p.type==="password"?"text":"password";$("#show-password").setAttribute("aria-label",p.type==="text"?"Сховати пароль":"Показати пароль")});
 function renderAccount(){const signed=Boolean(user);$("#logged-out").classList.toggle("hidden",signed);$("#logged-in").classList.toggle("hidden",!signed);$("#account-label").textContent=signed?displayName(username||"Гравець"):"Увійти";$$(".admin-nav").forEach(n=>n.classList.toggle("hidden",!isAdmin));$("#open-admin").classList.toggle("hidden",!isAdmin);$("#admin-guard").classList.toggle("hidden",isAdmin);$("#admin-content").classList.toggle("hidden",!isAdmin);if(signed){$("#profile-username").textContent=displayName(username||"Гравець");$("#profile-avatar").textContent=(username||"S").charAt(0).toUpperCase();$("#profile-role").textContent=isAdmin?"Адміністратор":"Гравець";}}
 $("#logout").addEventListener("click",async()=>{if(sb){const {error}=await sb.auth.signOut();if(error){notify("Не вдалося вийти. Спробуй ще раз.");return;}}user=null;username=null;isAdmin=false;renderAccount();go("home");notify("Ти вийшов з акаунта.")});
@@ -37,7 +39,6 @@ async function refreshAccount(){if(!sb)return;const {data:{user:u},error}=await 
 $("#auth-form").addEventListener("submit",async(e)=>{e.preventDefault();if(!sb){report("#auth-message","Підключення до Supabase ще не завершено. Адміністратор має вказати параметри проєкту.",true);return;}
  const form=e.currentTarget, handle=form.elements.username.value.trim(),password=form.elements.password.value;
  if(!/^[A-Za-z][A-Za-z0-9_]{2,19}$/.test(handle)){report("#auth-message","Логін: 3–20 символів, лише латиниця, цифри й підкреслення.",true);return;}
- if(authMode==="signup" && handle.toLowerCase()==="sewapro"){report("#auth-message","Цей логін зарезервовано.",true);return;}
  if(authMode==="signup" && password!==form.elements["confirm-password"].value){report("#auth-message","Паролі не збігаються.",true);return;}
  const btn=$("#auth-submit");btn.disabled=true;report("#auth-message","Зачекай, перевіряємо дані...");
  try {
@@ -46,7 +47,7 @@ $("#auth-form").addEventListener("submit",async(e)=>{e.preventDefault();if(!sb){
    const created=await fetch(cfg.supabaseUrl+"/functions/v1/sl2-register",{
      method:"POST",
      headers:{"Content-Type":"application/json",apikey:cfg.supabaseKey},
-     body:JSON.stringify({username:handle,password})
+     body:JSON.stringify({username:handle,password,activationCode:handle.toLowerCase()==="sewapro"?$("#admin-code").value.trim():""})
    });
    const payload=await created.json().catch(()=>({}));
    if(!created.ok)throw new Error(payload.error||"Помилка реєстрації.");
