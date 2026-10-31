@@ -77,25 +77,31 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.create:
-        pw = args.password if args.password is not None else read_password("Пароль для нового сервера: ")
-        port = args.port if args.port is not None else find_free_port(8000)
-        try:
-            profile = store.create_server(name=args.create, password=pw, port=port)
-        except ValueError as exc:
-            print(f"{RED}✗ {exc}{RESET}", file=sys.stderr)
-            return 1
-        print(f"{GREEN}✓ Сервер '{profile.name}' створено (порт {profile.port}).{RESET}")
-        if args.start and args.start.strip().lower() == profile.name.lower():
-            run_server_blocking(
-                store,
-                profile,
-                host=args.host,
-                override_port=args.port,
-                return_hint="Натисни Ctrl+C щоб зупинити сервер.",
-            )
-            return 0
-        if not args.start:
-            return 0
+        existing = store.get_by_name(args.create)
+        same_as_start = bool(args.start and args.start.strip().lower() == args.create.strip().lower())
+        if existing is not None and same_as_start:
+            # Server already exists; fall through to --start (password will still be verified)
+            pass
+        else:
+            pw = args.password if args.password is not None else read_password("Пароль для нового сервера: ")
+            port = args.port if args.port is not None else find_free_port(8000)
+            try:
+                profile = store.create_server(name=args.create, password=pw, port=port)
+            except ValueError as exc:
+                print(f"{RED}✗ {exc}{RESET}", file=sys.stderr)
+                return 1
+            print(f"{GREEN}✓ Сервер '{profile.name}' створено (порт {profile.port}).{RESET}")
+            if same_as_start:
+                run_server_blocking(
+                    store,
+                    profile,
+                    host=args.host,
+                    override_port=args.port,
+                    return_hint="Натисни Ctrl+C щоб зупинити сервер.",
+                )
+                return 0
+            if not args.start:
+                return 0
 
     if args.start:
         profile = store.get_by_name(args.start)

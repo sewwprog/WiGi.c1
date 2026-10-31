@@ -132,7 +132,8 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
             for k, v in extra_headers:
                 self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _send_html(self, status: int, content: str) -> None:
         body = content.encode("utf-8")
@@ -141,7 +142,8 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _read_json_body(self) -> dict[str, Any]:
         length_str = self.headers.get("Content-Length", "0")
@@ -158,9 +160,18 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             return {}
 
+    def do_HEAD(self) -> None:
+        self.do_GET()
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/") or "/"
+
+        if route == "/favicon.ico":
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
 
         if route == "/":
             self._send_html(200, _render_index_html(self.server))
