@@ -632,6 +632,7 @@ def git_action(
 def _default_os_state() -> dict[str, Any]:
     return {
         "theme": "cyber",
+        "animations": True,
         "sticky_note": "Швидкі нотатки сервера...\n• Ctrl+K — швидкий пошук\n• Ctrl+S — зберегти код",
         "tasks": [
             {"id": "t1", "title": "Клонувати або створити Git-репозиторій", "col": "todo", "priority": "high"},
@@ -650,6 +651,8 @@ def load_os_state(workspace_dir: Path) -> dict[str, Any]:
             if isinstance(saved, dict):
                 if isinstance(saved.get("theme"), str):
                     state["theme"] = saved["theme"]
+                if isinstance(saved.get("animations"), bool):
+                    state["animations"] = saved["animations"]
                 if isinstance(saved.get("sticky_note"), str):
                     state["sticky_note"] = saved["sticky_note"][:20_000]
                 if isinstance(saved.get("tasks"), list):
@@ -682,6 +685,8 @@ def save_os_state(workspace_dir: Path, patch_data: dict[str, Any]) -> dict[str, 
         allowed_themes = {"cyber", "nebula", "matrix", "sunset", "slate"}
         if patch_data["theme"] in allowed_themes:
             current["theme"] = patch_data["theme"]
+    if "animations" in patch_data and isinstance(patch_data["animations"], bool):
+        current["animations"] = patch_data["animations"]
     if "sticky_note" in patch_data and isinstance(patch_data["sticky_note"], str):
         current["sticky_note"] = patch_data["sticky_note"][:20_000]
     if "tasks" in patch_data and isinstance(patch_data["tasks"], list):

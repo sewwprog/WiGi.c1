@@ -663,6 +663,59 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       z-index: 9500;
       box-shadow: 0 12px 30px rgba(0,0,0,0.5);
     }}
+    /* WiGi compositor: GPU-friendly GNOME/KDE-inspired motion. No motion when disabled. */
+    @keyframes wigi-aurora {{
+      0%, 100% {{ transform: translate3d(-3%, 1%, 0) scale(1); opacity: .46; }}
+      50% {{ transform: translate3d(4%, -3%, 0) scale(1.09); opacity: .72; }}
+    }}
+    #desktop::after {{
+      content: ""; position: absolute; inset: -12%; pointer-events: none; z-index: 0;
+      background: radial-gradient(ellipse at 63% 35%, rgba(56,189,248,.085), transparent 43%),
+                  radial-gradient(ellipse at 32% 74%, rgba(168,85,247,.105), transparent 40%);
+      animation: wigi-aurora 24s ease-in-out infinite;
+    }}
+    body[data-motion="off"] #desktop::after {{ animation: none; }}
+    .os-win {{ transition: border-color .22s ease, box-shadow .22s ease, border-radius .28s ease; }}
+    .os-win.moving {{ box-shadow: 0 35px 75px rgba(0,0,0,.78), 0 0 0 1px rgba(125,211,252,.38); }}
+    .d-icon {{ transition: transform .24s cubic-bezier(.2,.8,.2,1), background .18s, border-color .18s; }}
+    .d-icon:hover {{ transform: translateY(-6px) scale(1.045); }}
+    .d-icon:active {{ transform: translateY(-2px) scale(.96); }}
+    .d-icon .app-badge {{ transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s; }}
+    .d-icon:hover .app-badge {{ transform: rotate(0deg) scale(1.12); box-shadow: inset 0 1px 2px rgba(255,255,255,.4), 0 14px 26px rgba(0,0,0,.5); }}
+    .task-pill, .start-btn, .sm-item, .btn, .tray-pill {{ transition: transform .2s cubic-bezier(.2,.8,.2,1), background .2s, border-color .2s, opacity .2s; }}
+    .task-pill:hover, .start-btn:hover, .sm-item:hover, .tray-pill:hover {{ transform: translateY(-3px); }}
+    .btn:active, .task-pill:active, .start-btn:active {{ transform: scale(.96); }}
+    @keyframes wigi-menu-in {{ from {{ opacity:0; transform:translateY(14px) scale(.94); }} to {{ opacity:1; transform:translateY(0) scale(1); }} }}
+    @keyframes wigi-palette-in {{ from {{ opacity:0; transform:translateY(-15px) scale(.97); }} to {{ opacity:1; transform:translateY(0) scale(1); }} }}
+    @keyframes wigi-toast-in {{ from {{ opacity:0; transform:translate(-50%, -16px) scale(.92); }} to {{ opacity:1; transform:translate(-50%, 0) scale(1); }} }}
+    #startMenu:not(.hidden), #ctxMenu:not(.hidden) {{ animation: wigi-menu-in .24s cubic-bezier(.16,1,.3,1) both; }}
+    #cmdPalette:not(.hidden) .cmd-box {{ animation: wigi-palette-in .26s cubic-bezier(.16,1,.3,1) both; }}
+    #toast:not(.hidden) {{ animation: wigi-toast-in .24s cubic-bezier(.16,1,.3,1) both; }}
+    .sm-item:hover .app-badge {{ transform: rotate(0deg) scale(1.12); }}
+    ::view-transition-old(root) {{ animation: .28s ease both fade-out; }}
+    ::view-transition-new(root) {{ animation: .36s ease both fade-in; }}
+    @keyframes fade-out {{ to {{ opacity:0; }} }}
+    @keyframes fade-in {{ from {{ opacity:0; }} }}
+    @media (prefers-reduced-motion: reduce) {{
+      #desktop::after, #startMenu:not(.hidden), #ctxMenu:not(.hidden),
+      #cmdPalette:not(.hidden) .cmd-box, #toast:not(.hidden),
+      ::view-transition-old(root), ::view-transition-new(root) {{ animation: none !important; }}
+      .os-win, .d-icon, .d-icon .app-badge, .task-pill, .start-btn,
+      .sm-item, .btn, .tray-pill {{ transition: none !important; }}
+      .d-icon:hover, .d-icon:active, .d-icon:hover .app-badge,
+      .sm-item:hover .app-badge, .task-pill:hover, .start-btn:hover,
+      .sm-item:hover, .tray-pill:hover {{ transform: none !important; }}
+    }}
+    body[data-motion="off"] #startMenu:not(.hidden), body[data-motion="off"] #ctxMenu:not(.hidden),
+    body[data-motion="off"] #cmdPalette:not(.hidden) .cmd-box, body[data-motion="off"] #toast:not(.hidden) {{ animation: none; }}
+    body[data-motion="off"] .os-win, body[data-motion="off"] .d-icon,
+    body[data-motion="off"] .d-icon .app-badge, body[data-motion="off"] .task-pill,
+    body[data-motion="off"] .start-btn, body[data-motion="off"] .sm-item,
+    body[data-motion="off"] .btn, body[data-motion="off"] .tray-pill {{ transition: none; }}
+    body[data-motion="off"] .d-icon:hover, body[data-motion="off"] .d-icon:hover .app-badge,
+    body[data-motion="off"] .sm-item:hover .app-badge, body[data-motion="off"] .task-pill:hover,
+    body[data-motion="off"] .start-btn:hover, body[data-motion="off"] .sm-item:hover,
+    body[data-motion="off"] .tray-pill:hover {{ transform: none; }}
   </style>
 </head>
 <body data-theme="cyber">
@@ -865,6 +918,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
     APPS.forEach(app => {{
       const d = document.createElement("div");
       d.className = "d-icon";
+      d.dataset.appId = app.id;
       d.innerHTML = `${{iconBadge(app)}}<div class="d-icon-label">${{esc(app.title)}}</div>`;
       d.addEventListener("click", () => openApp(app.id));
       dIconsEl.appendChild(d);
@@ -886,6 +940,8 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       if (data.ok && data.state) {{
         osState = data.state;
         document.body.dataset.theme = osState.theme || "cyber";
+        document.body.dataset.motion = osState.animations === false ? "off" : "on";
+        document.querySelectorAll('.motion-toggle').forEach(b => b.setAttribute('aria-pressed', String(osState.animations !== false)));
         document.getElementById("stickyArea").value = osState.sticky_note || "";
       }}
     }}
@@ -908,6 +964,50 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       }}, 650);
     }});
 
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function motionEnabled() {{ return osState.animations !== false && !motionQuery.matches; }}
+    function switchTheme(theme) {{
+      if(document.body.dataset.theme===theme)return;
+      const change=()=>{{document.body.dataset.theme=theme;}};
+      if(motionEnabled() && document.startViewTransition)document.startViewTransition(change);
+      else change();
+    }}
+    function animateWindow(w, frames, duration=300) {{
+      if (w.motion) {{ w.motion.cancel(); w.motion=null; }}
+      if (!motionEnabled() || !w.el.animate) return null;
+      const anim=w.el.animate(frames,{{duration,easing:'cubic-bezier(.2,.8,.2,1)',fill:'none'}});
+      w.motion=anim;
+      anim.finished.then(()=>{{if(w.motion===anim)w.motion=null;}},()=>{{if(w.motion===anim)w.motion=null;}});
+      return anim;
+    }}
+    function taskTarget(id) {{
+      return document.querySelector(`.task-pill[data-win-id="${{id}}"]`) || document.getElementById('startBtn');
+    }}
+    function flyFrames(w, target, inbound) {{
+      const r=w.el.getBoundingClientRect(), t=target.getBoundingClientRect();
+      const dx=t.left+t.width/2-r.left-r.width/2, dy=t.top+t.height/2-r.top-r.height/2;
+      const small={{transform:`translate(${{dx}}px, ${{dy}}px) scale(.16)`,opacity:0}};
+      const full={{transform:'translate(0, 0) scale(1)',opacity:1}};
+      return inbound?[small,full]:[full,small];
+    }}
+    function minimizeWin(id) {{
+      const w=windows.get(id);if(!w||w.minimized||w.closing)return;
+      w.minimized=true;renderTaskbar();
+      const anim=animateWindow(w,flyFrames(w,taskTarget(id),false),260);
+      const finish=()=>{{if(w.minimized&&windows.has(id)){{w.el.classList.add('hidden');w.el.classList.remove('focused');renderTaskbar();}}}};
+      if(anim)anim.finished.then(finish,()=>{{}});else finish();
+    }}
+    function morphWindow(el, change) {{
+      if (!motionEnabled() || !el.animate) {{change();return;}}
+      const before=el.getBoundingClientRect();
+      change();
+      const after=el.getBoundingClientRect();
+      if (!before.width||!after.width)return;
+      el.animate([
+        {{transform:`translate(${{before.left-after.left}}px, ${{before.top-after.top}}px) scale(${{before.width/after.width}}, ${{before.height/after.height}})`}},
+        {{transform:'translate(0, 0) scale(1)'}}
+      ],{{duration:310,easing:'cubic-bezier(.2,.8,.2,1)',transformOrigin:'top left'}});
+    }}
     // Window Manager
     const windows = new Map();
     let zCounter = 20;
@@ -916,8 +1016,12 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
     function focusWin(winId) {{
       const w = windows.get(winId);
       if (!w) return;
+      const wasMinimized=w.minimized;
+      if(w.closing)return;
+      if(w.motion) {{ w.motion.cancel(); w.motion=null; }}
       w.minimized = false;
       w.el.classList.remove("hidden");
+      if(wasMinimized)animateWindow(w,flyFrames(w,taskTarget(winId),true),300);
       zCounter += 1;
       w.el.style.zIndex = zCounter;
       windows.forEach((other, id) => other.el.classList.toggle("focused", id === winId));
@@ -927,10 +1031,15 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
     function closeWin(winId) {{
       const w = windows.get(winId);
       if (!w) return;
-      if (w.cleanup) w.cleanup();
-      w.el.remove();
-      windows.delete(winId);
-      renderTaskbar();
+      if(w.closing)return;
+      w.closing=true;
+      const finish=()=>{{
+        if(!windows.has(winId))return;
+        if(w.cleanup)w.cleanup();
+        w.el.remove();windows.delete(winId);renderTaskbar();
+      }};
+      const anim=animateWindow(w,[{{transform:'scale(1)',opacity:1}},{{transform:'scale(.94) translateY(18px)',opacity:0}}],180);
+      if(anim)anim.finished.then(finish,finish);else finish();
     }}
 
     function renderTaskbar() {{
@@ -941,13 +1050,11 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         pill.type = "button";
         const isTop = w.el.classList.contains("focused") && !w.minimized;
         pill.className = "task-pill" + (isTop ? " active" : "");
+        pill.dataset.winId=id;
         pill.innerHTML = `<span class="tiny-icon">${{iconSvg(w.app.id,17)}}</span><span>${{esc(w.title)}}</span>`;
         pill.addEventListener("click", () => {{
           if (isTop) {{
-            w.minimized = true;
-            w.el.classList.add("hidden");
-            w.el.classList.remove("focused");
-            renderTaskbar();
+            minimizeWin(id);
           }} else {{
             focusWin(id);
           }}
@@ -1006,7 +1113,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       const bar = el.querySelector(".win-bar");
       bar.addEventListener("dblclick", (e) => {{
         if (e.target.closest(".win-ctrls")) return;
-        el.classList.toggle("maximized");
+        morphWindow(el,()=>el.classList.toggle("maximized"));
       }});
 
       // Dragging
@@ -1016,19 +1123,33 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         const startY = e.clientY;
         const origL = el.offsetLeft;
         const origT = el.offsetTop;
+        let dragDx=0, dragDy=0;
         bar.setPointerCapture(e.pointerId);
+        el.classList.add('moving');
         const onMove = (ev) => {{
-          const nx = Math.max(-wWidth + 120, Math.min(desk.clientWidth - 80, origL + (ev.clientX - startX)));
+          dragDx=ev.clientX-startX;dragDy=ev.clientY-startY;
+          const nx = Math.max(-wWidth + 120, Math.min(desk.clientWidth - 80, origL + dragDx));
           const ny = Math.max(0, Math.min(desk.clientHeight - 38, origT + (ev.clientY - startY)));
           el.style.left = nx + "px";
           el.style.top = ny + "px";
         }};
         const onUp = () => {{
+          el.classList.remove('moving');
+          if(Math.abs(dragDx)+Math.abs(dragDy)>10 && windows.has(winId) && !el.classList.contains('maximized')) {{
+            const direction=Math.sign(dragDx || dragDy);
+            animateWindow(winRec,[
+              {{transform:`translateX(${{direction*6}}px) rotate(${{direction*.65}}deg)`}},
+              {{transform:`translateX(${{-direction*2}}px) rotate(${{-direction*.2}}deg)`}},
+              {{transform:'translateX(0) rotate(0deg)'}}
+            ],260);
+          }}
           bar.removeEventListener("pointermove", onMove);
           bar.removeEventListener("pointerup", onUp);
+          bar.removeEventListener("pointercancel", onUp);
         }};
         bar.addEventListener("pointermove", onMove);
         bar.addEventListener("pointerup", onUp);
+        bar.addEventListener("pointercancel", onUp);
       }});
 
       // Resizing
@@ -1048,36 +1169,31 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         const onUp = () => {{
           grip.removeEventListener("pointermove", onMove);
           grip.removeEventListener("pointerup", onUp);
+          grip.removeEventListener("pointercancel", onUp);
         }};
         grip.addEventListener("pointermove", onMove);
         grip.addEventListener("pointerup", onUp);
+        grip.addEventListener("pointercancel", onUp);
       }});
 
       // Controls
-      el.querySelector(".snap-l").addEventListener("click", () => {{
+      el.querySelector(".snap-l").addEventListener("click", () => morphWindow(el, () => {{
         el.classList.remove("maximized");
         el.style.left = "6px";
         el.style.top = "6px";
         el.style.width = (Math.floor(desk.clientWidth / 2) - 9) + "px";
         el.style.height = (desk.clientHeight - 12) + "px";
-      }});
-      el.querySelector(".snap-r").addEventListener("click", () => {{
+      }}));
+      el.querySelector(".snap-r").addEventListener("click", () => morphWindow(el, () => {{
         el.classList.remove("maximized");
         const half = Math.floor(desk.clientWidth / 2);
         el.style.left = (half + 3) + "px";
         el.style.top = "6px";
         el.style.width = (desk.clientWidth - half - 9) + "px";
         el.style.height = (desk.clientHeight - 12) + "px";
-      }});
-      el.querySelector(".min").addEventListener("click", (e) => {{
-        e.stopPropagation();
-        const rec = windows.get(winId);
-        if (rec) rec.minimized = true;
-        el.classList.add("hidden");
-        el.classList.remove("focused");
-        renderTaskbar();
-      }});
-      el.querySelector(".max").addEventListener("click", () => el.classList.toggle("maximized"));
+      }}));
+      el.querySelector(".min").addEventListener("click", e => {{e.stopPropagation();minimizeWin(winId);}});
+      el.querySelector(".max").addEventListener("click", () => morphWindow(el,()=>el.classList.toggle("maximized")));
       el.querySelector(".close").addEventListener("click", () => closeWin(winId));
 
       document.getElementById("windowsLayer").appendChild(el);
@@ -1085,6 +1201,8 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       windows.set(winId, winRec);
       mountAppBody(winRec, el.querySelector(".win-body"), params || {{}});
       focusWin(winId);
+      const launcher=document.querySelector(`.d-icon[data-app-id="${{appId}}"]`) || document.getElementById('startBtn');
+      animateWindow(winRec,flyFrames(winRec,launcher,true),360);
     }}
 
     // =========================================================================
@@ -2035,6 +2153,10 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
             </div>
           </div>
 
+          <div style="background:var(--panel-2); border:1px solid var(--border); border-radius:11px; padding:13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div><div style="font-weight:700;">✦ Анімації вікон і робочого столу</div><div class="muted" style="font-size:12px;margin-top:4px;">Плавне відкриття, згортання, розгортання й перемикання тем. Системне «Зменшити рух» завжди має пріоритет.</div></div>
+            <button class="btn btn-ghost motion-toggle" type="button" aria-pressed="true">Анімації увімкнено</button>
+          </div>
           <div style="background:var(--panel-2); border:1px solid var(--border); border-radius:11px; padding:13px;">
             <div style="font-weight:700; margin-bottom:6px;">🔑 Змінні середовища сервера (ENV)</div>
             <div class="muted" style="font-size:12px; margin-bottom:8px;">Доступні у Python, Терміналі та Git (формат KEY=VALUE):</div>
@@ -2049,10 +2171,21 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
 
       body.querySelectorAll("[data-th]").forEach(b => b.addEventListener("click", async () => {{
         const th = b.dataset.th;
-        document.body.dataset.theme = th;
+        switchTheme(th);
         await saveOsStatePatch({{ theme: th }});
         toast(`Тему змінено: ${{th}}`);
       }}));
+
+      const motionToggle=body.querySelector('.motion-toggle');
+      motionToggle.setAttribute('aria-pressed', String(osState.animations !== false));
+      motionToggle.textContent=osState.animations === false ? 'Анімації вимкнено' : 'Анімації увімкнено';
+      motionToggle.onclick=async()=>{{
+        const enabled=osState.animations === false;
+        document.body.dataset.motion=enabled?'on':'off';
+        motionToggle.setAttribute('aria-pressed',String(enabled));
+        motionToggle.textContent=enabled?'Анімації увімкнено':'Анімації вимкнено';
+        await saveOsStatePatch({{animations:enabled}});
+      }};
 
       api("api/env").then(({{ data }}) => {{
         if (data.ok) {{
@@ -2118,7 +2251,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       if (act === "cycle-theme") {{
         const order = ["cyber", "nebula", "matrix", "sunset", "slate"];
         const next = order[(order.indexOf(document.body.dataset.theme) + 1) % order.length];
-        document.body.dataset.theme = next;
+        switchTheme(next);
         await saveOsStatePatch({{ theme: next }});
         toast(`Тема: ${{next}}`);
       }}
