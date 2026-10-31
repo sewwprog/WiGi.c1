@@ -399,3 +399,68 @@ class TestSiteHosting(unittest.TestCase):
                 for script in folder.glob('*.js'):
                     result = subprocess.run(['node', '--check', str(script)], capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, f'{template}: {result.stderr}')
+
+    def test_bind_existing_html_to_local_domain_without_copying(self) -> None:
+        from wigi import sites as sites_ops
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            store = ServerStore(servers_file=base/'data/servers.json', workspaces_dir=base/'servers')
+            profile = store.create_server('Local', 'secret')
+            ws = store.ensure_workspace(profile)
+            project = ws/'my-project'
+            project.mkdir()
+            (project/'page.html').write_text('<h1>My own page</h1><link rel="stylesheet" href="style.css">', encoding='utf-8')
+            (project/'style.css').write_text('h1{color:red}', encoding='utf-8')
+            (project/'private.env').write_text('SECRET', encoding='utf-8')
+            server = WiGiHTTPServer(('127.0.0.1', 0), profile, ws, quiet=True)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            url = f'http://127.0.0.1:{server.server_address[1]}'
+            try:
+                def call(path: str, token: str = '', data: dict | None = None, host: str = '', forwarded: str = '') -> tuple[int, bytes]:
+                    headers = {'Content-Type': 'application/json'}
+                    if token: headers['Authorization'] = 'Bearer '+token
+                    if host: headers['Host'] = host
+                    if forwarded: headers['X-Forwarded-For'] = forwarded
+                    req = urllib.request.Request(url+path, data=json.dumps(data).encode() if data is not None else None, headers=headers)
+                    try:
+                        with urllib.request.urlopen(req) as r: return r.status, r.read()
+                    except urllib.error.HTTPError as exc:
+                        with exc: return exc.code, exc.read()
+                _, response = call('/api/login', data={'password':'secret'})
+                token = json.loads(response)['token']
+                status, response = call('/api/sites/create', token, {
+                    'domain':'my-own-name', 'entry_file':'my-project/page.html', 'template':'store'})
+                self.assertEqual(status, 200)
+                site = json.loads(response)['site']
+                self.assertEqual(site['domain'], 'my-own-name')
+                self.assertEqual(site['entry'], 'my-project/page.html')
+                self.assertEqual(site['template'], 'file')
+                self.assertTrue(site['local_only'])
+                self.assertFalse((project/'index.html').exists())
+                self.assertEqual(call('/s/my-own-name/')[1], (project/'page.html').read_bytes())
+                self.assertEqual(call('/s/my-own-name/style.css')[1], b'h1{color:red}')
+                self.assertEqual(call('/', host='my-own-name.localhost')[0], 200)
+                self.assertEqual(call('/s/my-own-name/private.env')[0], 404)
+                self.assertEqual(call('/s/my-own-name/', forwarded='192.168.1.42')[0], 403)
+                self.assertEqual(call('/', host='my-own-name', forwarded='192.168.1.42')[0], 403)
+                self.assertTrue(sites_ops.is_site_accessible(site, '127.0.0.1'))
+                self.assertFalse(sites_ops.is_site_accessible(site, '192.168.1.42'))
+                self.assertFalse(sites_ops.is_site_accessible(site, '127.0.0.1', '192.168.1.42'))
+                (project/'page.html').write_text('<h1>Updated!</h1>', encoding='utf-8')
+                self.assertIn(b'Updated!', call('/s/my-own-name/')[1])
+                self.assertEqual(call('/api/sites/delete', token, {'id':site['id'],'delete_files':True})[0], 200)
+                self.assertTrue((project/'page.html').exists())
+                self.assertEqual(call('/s/my-own-name/')[0], 404)
+                # Workspace-root file mounts must not expose neighbouring server files.
+                (ws/'root.html').write_text('ROOT', encoding='utf-8')
+                root_site = sites_ops.create_site(ws, 'root.local', entry_file='root.html')
+                self.assertEqual(call('/s/root.local/')[1], b'ROOT')
+                self.assertEqual(call('/s/root.local/server.json')[0], 404)
+                with self.assertRaises(ValueError):
+                    sites_ops.create_site(ws, 'bad.local', entry_file='../outside.html')
+                self.assertEqual(root_site['entry'], 'root.html')
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=3)

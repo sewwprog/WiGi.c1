@@ -284,6 +284,9 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
             server_hostname=self.server.hostname,
         )
         if vhost_site is not None:
+            if not sites_ops.is_site_accessible(vhost_site, self.client_address[0], self.headers.get("X-Forwarded-For", "").split(",")[0].strip()):
+                self._send_html(403, "<h1>Цей локальний сайт доступний лише на цьому комп’ютері.</h1>")
+                return
             status_code, fname, raw_bytes = sites_ops.serve_site_file(
                 self.server.workspace_dir,
                 vhost_site,
@@ -310,6 +313,9 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
                     404,
                     f"<!DOCTYPE html><html lang='uk'><body style='background:#090d16;color:#e2e8f0;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='text-align:center;'><h2>Домен {html.escape(dom_part)} не знайдено</h2><p style='color:#94a3b8;'>Створи його у додатку «Сайти та Домени» в WiGi OS.</p></div></body></html>",
                 )
+                return
+            if not sites_ops.is_site_accessible(site, self.client_address[0], self.headers.get("X-Forwarded-For", "").split(",")[0].strip()):
+                self._send_html(403, "<h1>Цей локальний сайт доступний лише на цьому комп’ютері.</h1>")
                 return
             status_code, fname, raw_bytes = sites_ops.serve_site_file(
                 self.server.workspace_dir,
@@ -648,6 +654,7 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
                 template = str(data.get("template", "landing"))
                 folder = str(data.get("folder", ""))
                 accent = str(data.get("accent", "#38bdf8"))
+                entry_file = str(data.get("entry_file", ""))
                 site = sites_ops.create_site(
                     self.server.workspace_dir,
                     domain=domain,
@@ -655,6 +662,8 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
                     template=template,
                     folder=folder,
                     accent=accent,
+                    entry_file=entry_file,
+                    local_only=bool(data.get("local_only", False)),
                 )
                 self.server.record_event("DOMAIN", f"Запущено сайт '{site['title']}' на домені {site['domain']}")
                 self._send_json(200, {"ok": True, "site": site})

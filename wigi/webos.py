@@ -1117,6 +1117,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
           <div style="margin-left:auto; display:flex; gap:6px;">
             <button class="btn btn-green ide-run-py hidden" type="button">▶ Запустити Python</button>
             <button class="btn btn-green ide-run-html hidden" type="button">🌐 Відкрити в Браузері</button>
+            <button class="btn btn-ghost ide-bind-domain hidden" type="button">◈ Прив'язати домен</button>
             <button class="btn ide-save" type="button" disabled>💾 Зберегти (Ctrl+S)</button>
           </div>
         </div>
@@ -1177,6 +1178,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       const saveBtn = body.querySelector(".ide-save");
       const runPyBtn = body.querySelector(".ide-run-py");
       const runHtmlBtn = body.querySelector(".ide-run-html");
+      const bindBtn = body.querySelector(".ide-bind-domain");
 
       function syncGutter() {{
         const lines = (areaEl.value || "").split("\\n").length;
@@ -1242,6 +1244,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
           saveBtn.disabled = true;
           runPyBtn.classList.add("hidden");
           runHtmlBtn.classList.add("hidden");
+          bindBtn.classList.add("hidden");
           syncGutter();
           renderTabs();
           return;
@@ -1251,6 +1254,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         saveBtn.disabled = false;
         runPyBtn.classList.toggle("hidden", !p.endsWith(".py"));
         runHtmlBtn.classList.toggle("hidden", !(p.endsWith(".html") || p.endsWith(".htm")));
+        bindBtn.classList.toggle("hidden", !/\.html?$/i.test(p));
         previewEl.classList.toggle('hidden', !/\.html?$/i.test(p));
         syncGutter();updateCursor();refreshPreview();
         renderTabs();
@@ -1319,6 +1323,11 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         openApp("browser", {{ file: activePath }});
       }});
 
+      bindBtn.addEventListener('click', async () => {{
+        if (!activePath) return;
+        await saveActive();
+        openApp('sites', {{ file:activePath }});
+      }});
       body.querySelector(".ide-up").addEventListener("click", () => loadTree(treeParent));
       body.querySelector(".ide-ref").addEventListener("click", () => loadTree(treeDir));
       body.querySelector(".ide-newf").addEventListener("click", async () => {{
@@ -1841,9 +1850,9 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         tabBar.innerHTML='';tabs.forEach((tab,i)=>{{ const btn=document.createElement('button');btn.type='button';btn.className='br-tab'+(active===i?' active':'');btn.textContent=(tab.domain?'◈ ':'')+(tab.address||'Нова вкладка')+'  ×';btn.onclick=e=>{{if(e.offsetX>btn.clientWidth-23 && tabs.length>1){{tabs.splice(i,1);active=Math.max(0,Math.min(active,tabs.length-1));show();}}else{{active=i;show();}}}};tabBar.appendChild(btn); }});
         const add=document.createElement('button');add.type='button';add.className='br-tab';add.textContent='＋';add.onclick=()=>newTab('');tabBar.appendChild(add);
       }}
-      function show() {{ const tab=tabs[active];if(!tab)return; inp.value=tab.domain?'🔒 https://'+tab.address:tab.address; renderTabs();frame.removeAttribute('srcdoc');if(tab.url)frame.src=tab.url;else frame.srcdoc='<body style="background:#101b30;color:#e2e8f0;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1>WiGi Browser</h1><p>Введи домен сайту або відкрий закладку.</p></div></body>'; }}
+      function show() {{ const tab=tabs[active];if(!tab)return; inp.value=tab.domain?'◈ локально: '+tab.address:tab.address; renderTabs();frame.removeAttribute('srcdoc');if(tab.url)frame.src=tab.url;else frame.srcdoc='<body style="background:#101b30;color:#e2e8f0;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1>WiGi Browser</h1><p>Введи домен сайту або відкрий закладку.</p></div></body>'; }}
       function navigate(address) {{
-        const raw=address.replace(/^🔒\s*/, '');
+        const raw=address.replace(/^◈ локально:\s*/, '');
         const result=resolve(raw);const tab=tabs[active];tab.address=result.domain?raw.replace(/^https?:\/\//i,''):raw;tab.url=result.url;tab.file=result.file;tab.domain=result.domain;show();
       }}
       function newTab(address) {{ tabs.push({{address:'',url:'',domain:'',file:''}});active=tabs.length-1;navigate(address); }}
@@ -1862,7 +1871,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
     }}
 
     // SITE STUDIO — create, edit and publish multi-file sites on custom domains.
-    function mountSitesStudio(winRec, body) {{
+    function mountSitesStudio(winRec, body, params) {{
       let sites = [], port = location.port || "80", lanIp = "127.0.0.1";
       body.innerHTML = `
         <div style="padding:18px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:17px;">
@@ -1870,6 +1879,17 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
             <div><div style="font-size:20px;font-weight:800;">Сайти <span style="color:var(--accent)">&</span> Домени</div><div class="muted" style="font-size:12px;margin-top:4px;">Створюй файли · публікуй миттєво · відкривай через WiGi DNS</div></div>
             <button type="button" class="btn btn-ghost site-refresh">↻ Оновити</button>
           </div>
+          <form class="local-site-form" style="padding:17px;background:linear-gradient(110deg,#10303d,#172440);border:1px solid #2a8a9d;border-radius:14px;display:flex;flex-direction:column;gap:10px;">
+            <div><strong style="font-size:16px;">Прив'язати свій HTML-файл до домену</strong><div class="muted" style="font-size:12px;margin-top:5px;">Напиши HTML у Code Studio, вибери саме цей файл і придумай будь-яке локальне ім'я.</div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <input class="local-file mono" name="entry_file" type="text" required readonly placeholder="Спочатку вибери файл .html або .htm →" style="flex:2;min-width:220px;" />
+              <button type="button" class="btn btn-ghost local-pick">▤ Вибрати HTML</button>
+              <input name="domain" type="text" required placeholder="Мій домен · game.local / mysite.ua / game" style="flex:2;min-width:210px;" />
+              <button type="submit" class="btn btn-green">◈ Прив'язати локально</button>
+            </div>
+            <span class="muted" style="font-size:11px;">Лише для цього комп’ютера. Файл залишається на місці; якщо відредагуєш і збережеш його — сайт оновиться. У WiGi Browser працює без зміни DNS; у звичайному браузері відкривай посилання .localhost або налаштуй hosts.</span>
+            <div class="local-picker hidden" style="background:#0a1727;padding:10px;border:1px solid var(--border);border-radius:9px;max-height:220px;overflow:auto;"></div>
+          </form>
           <form class="site-form" style="display:flex;flex-wrap:wrap;gap:8px;padding:16px;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;">
             <div style="width:100%;font-weight:700;font-size:13px;">+ Новий сайт</div>
             <input name="domain" type="text" required placeholder="Домен · myshop.ua / studio.dev" />
@@ -1880,9 +1900,37 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
             <div class="muted" style="width:100%;font-size:11px;">Немає папки? Згенеруємо HTML, CSS і JS. Є папка з index.html? Підключимо її без перезапису.</div>
           </form>
           <div class="site-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;"></div>
-          <div class="muted" style="font-size:11px;line-height:1.6;">WiGi DNS працює в браузері ОС. Для доступу до власного домену з інших пристроїв налаштуй DNS A → IP сервера (та HTTPS через reverse proxy), або скористайся публічним посиланням /s/домен/. Локально працює alias .localhost без DNS.</div>
+          <div class="muted" style="font-size:11px;line-height:1.6;">Прив’язаний HTML-файл видно тільки на цьому комп’ютері. WiGi DNS працює в браузері ОС. Для окремих публічних сайтів налаштуй DNS A → IP сервера (та HTTPS через reverse proxy), або скористайся публічним посиланням /s/домен/. Локально працює alias .localhost без DNS.</div>
         </div>`;
       const list = body.querySelector(".site-list");
+      const localForm = body.querySelector('.local-site-form');
+      const picker = body.querySelector('.local-picker');
+      const selectedFile = body.querySelector('.local-file');
+      function selectFile(file) {{
+        if (!/\.html?$/i.test(file)) return toast('Можна прив’язати тільки HTML-файл',true);
+        selectedFile.value=file;picker.classList.add('hidden');
+        localForm.querySelector('[name="domain"]').focus();
+      }}
+      async function browseFiles(dir='') {{
+        const r=await api('api/files?path='+encodeURIComponent(dir));
+        if (!r.data.ok) return toast(r.data.error,true);
+        picker.classList.remove('hidden');picker.innerHTML='';
+        const label=document.createElement('div');label.className='muted mono';label.style.cssText='padding:5px;font-size:11px';label.textContent='/'+(r.data.cwd||'');picker.appendChild(label);
+        if(dir) {{ const up=document.createElement('button');up.className='btn btn-ghost';up.type='button';up.textContent='↑ Назад';up.onclick=()=>browseFiles(r.data.parent||'');picker.appendChild(up); }}
+        r.data.items.filter(it=>it.type==='dir'||/\.html?$/i.test(it.name)).forEach(it=>{{
+          const btn=document.createElement('button');btn.className='btn btn-ghost';btn.type='button';btn.style.cssText='display:block;width:100%;text-align:left;margin:4px 0;white-space:normal';btn.textContent=(it.type==='dir'?'▣ ':'◈ ')+it.name;
+          btn.onclick=()=>it.type==='dir'?browseFiles(it.path):selectFile(it.path);picker.appendChild(btn);
+        }});
+        if(!r.data.items.some(it=>it.type==='dir'||/\.html?$/i.test(it.name))) {{ const empty=document.createElement('div');empty.className='muted';empty.textContent='HTML-файлів тут немає';picker.appendChild(empty); }}
+      }}
+      body.querySelector('.local-pick').onclick=()=>picker.classList.contains('hidden')?browseFiles():picker.classList.add('hidden');
+      localForm.onsubmit=async e=>{{
+        e.preventDefault();const fields=Object.fromEntries(new FormData(localForm));
+        const r=await api('api/sites/create',{{method:'POST',body:JSON.stringify(fields)}});
+        if(!r.data.ok)return toast(r.data.error,true);
+        localForm.reset();toast('Локальний домен прив’язано: '+r.data.site.domain);await refresh();
+        openApp('browser',{{domain:r.data.site.domain}});
+      }};
       function siteUrl(s) {{ return `${{ROOT}}/s/${{encodeURIComponent(s.domain)}}/`; }}
       async function copyText(text) {{
         try {{ await navigator.clipboard.writeText(text); toast("Скопійовано"); }}
@@ -1897,16 +1945,19 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         sites.forEach(site => {{
           const card = document.createElement("article"); card.className = "site-card";
           card.innerHTML = `
-            <div style="display:flex;gap:10px;align-items:center;">${{iconBadge(APPS.find(a=>a.id==='sites'),38)}}<div style="min-width:0;flex:1"><strong>${{esc(site.title)}}</strong><div class="mono" style="color:var(--accent);font-size:12px;overflow:hidden;text-overflow:ellipsis;">${{esc(site.domain)}}</div></div><span class="site-stat" style="color:${{site.enabled ? '#4ade80' : '#fbbf24'}}">${{site.enabled ? '● Online' : '● Чернетка'}}</span></div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;"><span class="site-stat">◉ ${{Number(site.visits||0)}} відвідувань</span><span class="site-stat">${{esc(site.template)}}</span><span class="site-stat mono">/${{esc(site.folder)}}</span></div>
+            <div style="display:flex;gap:10px;align-items:center;">${{iconBadge(APPS.find(a=>a.id==='sites'),38)}}<div style="min-width:0;flex:1"><strong>${{esc(site.title)}}</strong><div class="mono" style="color:var(--accent);font-size:12px;overflow:hidden;text-overflow:ellipsis;">${{esc(site.domain)}}</div></div><span class="site-stat" style="color:${{site.enabled ? '#4ade80' : '#fbbf24'}}">${{site.enabled ? (site.local_only ? '● Лише локально' : '● Online') : '● Чернетка'}}</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;"><span class="site-stat">◉ ${{Number(site.visits||0)}} відвідувань</span><span class="site-stat">${{esc(site.template)}}</span><span class="site-stat mono" title="Вхідний HTML-файл">${{esc(site.entry)}}</span></div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;"><button type="button" class="btn site-open">↗ Відкрити</button><button type="button" class="btn btn-ghost site-edit">✎ Код</button><button type="button" class="btn btn-ghost site-copy">⧉ URL</button><button type="button" class="btn btn-ghost site-hosts">⌘ DNS</button><button type="button" class="btn btn-ghost site-toggle">${{site.enabled ? '⏸ Вимкнути' : '▶ Запустити'}}</button><button type="button" class="btn btn-danger site-delete">×</button></div>
-            <div class="muted mono" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;">Локально: http://${{esc(site.localhost_alias)}}:${{port}} · Публічно: /s/${{esc(site.domain)}}/</div>`;
+            <div class="muted mono" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;">${{site.local_only ? 'Тільки на цьому комп’ютері' : 'Публічно'}}: http://${{esc(site.localhost_alias)}}:${{port}}/ · /s/${{esc(site.domain)}}/</div>`;
           card.querySelector('.site-open').onclick = () => openApp('browser', {{ domain:site.domain }});
           card.querySelector('.site-edit').onclick = () => openApp('code', {{ dir:site.folder, file:site.entry }});
           card.querySelector('.site-copy').onclick = () => copyText(new URL(siteUrl(site), location.href).href);
           card.querySelector('.site-hosts').onclick = () => {{
-            const ip = lanIp && !lanIp.startsWith('127.') ? lanIp : '127.0.0.1';
-            const msg = `Реальний домен ${{site.domain}} потребує DNS A → ${{ip}} та відкритого порту ${{port}}. Для HTTPS налаштуй reverse proxy/TLS.\n\nLinux/WSL: echo '${{ip}} ${{site.domain}}' | sudo tee -a /etc/hosts\nWindows: додай '${{ip}} ${{site.domain}}' в C:\\Windows\\System32\\drivers\\etc\\hosts\n\nБез налаштувань: http://${{site.localhost_alias}}:${{port}}/ або ${{new URL(siteUrl(site), location.href).href}}`;
+            const ip = site.local_only ? '127.0.0.1' : (lanIp && !lanIp.startsWith('127.') ? lanIp : '127.0.0.1');
+            const intro = site.local_only
+              ? `Локальне ім’я ${{site.domain}} працює всередині WiGi Browser без DNS. У звичайному браузері відкрий http://${{site.localhost_alias}}:${{port}}/ без налаштувань. Для точного імені ${{site.domain}} додай запис hosts нижче й відкрий http://${{site.domain}}:${{port}}/. HTTPS автоматично не вмикається.`
+              : `Для реального доступу до ${{site.domain}} налаштуй DNS A → ${{ip}}, порт і HTTPS через reverse proxy.`;
+            const msg = `${{intro}}\\n\\nLinux/WSL: echo '${{ip}} ${{site.domain}}' | sudo tee -a /etc/hosts\\nWindows: додай '${{ip}} ${{site.domain}}' в C:\\Windows\\System32\\drivers\\etc\\hosts`;
             copyText(msg); alert(msg);
           }};
           card.querySelector('.site-toggle').onclick = async () => {{ const r = await api('api/sites/update',{{method:'POST',body:JSON.stringify({{id:site.id,enabled:!site.enabled}})}}); if (!r.data.ok) toast(r.data.error,true); else refresh(); }};
@@ -1922,7 +1973,8 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         openApp('code',{{ dir:r.data.site.folder,file:r.data.site.entry }});
       }};
       body.querySelector('.site-refresh').onclick=refresh;
-      winRec.onParams=refresh;
+      winRec.onParams=p=>{{if(p?.file)selectFile(p.file);refresh();}};
+      if (params?.file) selectFile(params.file);
       refresh();
     }}
 
