@@ -192,10 +192,10 @@ def run_server_blocking(
     print()
     print(f"{GREEN}{BOLD}------------------------------------------------------------{RESET}")
     print(f"  {GREEN}●{RESET} {BOLD}Сервер активний:{RESET} {updated.name}")
-    print(f"  {BOLD}Браузер (цей ноут):{RESET}   http://localhost:{port}")
-    print(f"  {BOLD}У локальній мережі:{RESET}   http://{lan_ip}:{port}")
+    print(f"  {BOLD}Панель сервера:{RESET}       http://localhost:{port}")
+    print(f"  {BOLD}WiGi OS (Робочий стіл):{RESET} http://localhost:{port}/os")
+    print(f"  {BOLD}У локальній мережі:{RESET}   http://{lan_ip}:{port}/os")
     print(f"  {BOLD}Папка середовища:{RESET}     {workspace_dir}")
-    print(f"  {BOLD}Можливості панелі:{RESET}    Файли/Код • Термінал/Python • Git/GitHub • ENV")
     print(f"{GREEN}{BOLD}------------------------------------------------------------{RESET}")
     print(f"  {DIM}{return_hint}{RESET}\n")
 
