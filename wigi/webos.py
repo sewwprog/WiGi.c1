@@ -2157,6 +2157,15 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
             <div><div style="font-weight:700;">✦ Анімації вікон і робочого столу</div><div class="muted" style="font-size:12px;margin-top:4px;">Плавне відкриття, згортання, розгортання й перемикання тем. Системне «Зменшити рух» завжди має пріоритет.</div></div>
             <button class="btn btn-ghost motion-toggle" type="button" aria-pressed="true">Анімації увімкнено</button>
           </div>
+          <form class="delete-server-form" style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.35);border-radius:11px;padding:14px;display:flex;flex-direction:column;gap:9px;">
+            <strong style="color:#fca5a5;">Небезпечна зона · Видалити цей сервер</strong>
+            <div class="muted" style="font-size:12px;">Сервер буде зупинено й прибрано зі списку. За замовчуванням файли залишаться на диску. Для підтвердження введи точну назву й пароль.</div>
+            <span class="delete-server-name mono" style="font-size:12px;color:#fca5a5;"></span>
+            <input class="delete-confirm-name" type="text" required autocomplete="off" placeholder="Точна назва сервера" />
+            <input class="delete-password" type="password" required autocomplete="current-password" placeholder="Пароль сервера" />
+            <label style="font-size:12px;display:flex;gap:8px;align-items:center;cursor:pointer;"><input class="delete-remove-files" type="checkbox" /> Також назавжди видалити всі файли робочої папки</label>
+            <button class="btn btn-danger" type="submit" style="align-self:flex-start;">Видалити сервер</button>
+          </form>
           <div style="background:var(--panel-2); border:1px solid var(--border); border-radius:11px; padding:13px;">
             <div style="font-weight:700; margin-bottom:6px;">🔑 Змінні середовища сервера (ENV)</div>
             <div class="muted" style="font-size:12px; margin-bottom:8px;">Доступні у Python, Терміналі та Git (формат KEY=VALUE):</div>
@@ -2185,6 +2194,30 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         motionToggle.setAttribute('aria-pressed',String(enabled));
         motionToggle.textContent=enabled?'Анімації увімкнено':'Анімації вимкнено';
         await saveOsStatePatch({{animations:enabled}});
+      }};
+
+      const deleteForm=body.querySelector('.delete-server-form');
+      let deleteServerName='';
+      api('api/status').then(({{data}})=>{{
+        if(data.ok){{deleteServerName=data.server.name;deleteForm.querySelector('.delete-server-name').textContent=`Назва: ${{deleteServerName}}`;}}
+      }}).catch(()=>{{}});
+      deleteForm.onsubmit=async e=>{{
+        e.preventDefault();
+        const confirm_name=deleteForm.querySelector('.delete-confirm-name').value;
+        const password=deleteForm.querySelector('.delete-password').value;
+        const remove_workspace=deleteForm.querySelector('.delete-remove-files').checked;
+        if(!deleteServerName || confirm_name!==deleteServerName)return toast('Введи точну назву сервера',true);
+        if(!confirm(remove_workspace
+          ? `НАЗАВЖДИ видалити сервер ${{deleteServerName}} та ВСІ його файли? Це неможливо скасувати.`
+          : `Видалити сервер ${{deleteServerName}} зі списку? Файли залишаться на диску.`))return;
+        const btn=deleteForm.querySelector('button[type="submit"]');btn.disabled=true;
+        try{{
+          const {{data}}=await api('api/server/delete',{{method:'POST',body:JSON.stringify({{confirm_name,password,remove_workspace}})}});
+          if(!data.ok){{toast(data.error||'Помилка видалення',true);btn.disabled=false;return;}}
+          setToken('');
+          toast('Сервер зупиняється та видаляється. Повернись у меню для створення іншого.');
+          deleteForm.querySelector('.delete-password').value='';
+        }}catch(err){{toast('Не вдалося надіслати запит: '+err.message,true);btn.disabled=false;}}
       }};
 
       api("api/env").then(({{ data }}) => {{

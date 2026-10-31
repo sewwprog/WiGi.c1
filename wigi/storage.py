@@ -371,9 +371,15 @@ class ServerStore:
         if target is None:
             return False
 
-        self._save_raw([asdict(p) for p in remaining])
         if remove_workspace:
             ws = self.workspaces_dir / target.slug
+            base = self.workspaces_dir.resolve()
+            # The registry is editable on disk: never follow a tampered slug or a
+            # symlink outside the managed workspace directory while deleting.
+            if (not target.slug or ws.parent.resolve() != base or ws.is_symlink()
+                    or (ws.exists() and ws.resolve().parent != base)):
+                raise ValueError("Некоректний шлях папки сервера. Видалення скасовано.")
             if ws.exists():
-                shutil.rmtree(ws, ignore_errors=True)
+                shutil.rmtree(ws)
+        self._save_raw([asdict(p) for p in remaining])
         return True
