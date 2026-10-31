@@ -47,11 +47,35 @@ class WiGiHTTPServer(ThreadingHTTPServer):
         self.lan_ip = get_lan_ip()
         self.hostname = socket.gethostname()
         self._lock = threading.Lock()
+        self._deleting = False
         self._sessions: dict[str, dict[str, Any]] = {}
         self._events: deque[dict[str, str]] = deque(maxlen=100)
         super().__init__(server_address, WiGiRequestHandler)
         actual_port = self.server_address[1]
         self.record_event("SYSTEM", f"Сервер '{profile.name}' запущено на порту {actual_port}")
+
+    def schedule_delete(self, remove_workspace: bool) -> bool:
+        """Stop the HTTP loop before removing this running server from the registry."""
+        if self.store is None:
+            return False
+        with self._lock:
+            if self._deleting:
+                return False
+            self._deleting = True
+
+        def finish() -> None:
+            try:
+                self.shutdown()
+                assert self.store is not None
+                self.store.delete_server(self.profile.id, remove_workspace=remove_workspace)
+                self.record_event("SYSTEM", f"Сервер '{self.profile.name}' видалено")
+            except (OSError, ValueError) as exc:
+                self.record_event("ERROR", f"Не вдалося видалити сервер: {exc}")
+                with self._lock:
+                    self._deleting = False
+
+        threading.Thread(target=finish, daemon=True, name="wigi-delete-server").start()
+        return True
 
     def record_event(self, kind: str, message: str) -> None:
         now = datetime.now().strftime("%H:%M:%S")
@@ -487,6 +511,9 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         data = self._read_json_body()
         if data is None:
             return
+        if self.server._deleting:
+            self._send_json(503, {"ok": False, "error": "Сервер зупиняється та видаляється."})
+            return
 
         if route == "/api/login":
             password = str(data.get("password", ""))
@@ -755,6 +782,30 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
                 self.server.revoke_other_sessions(cur_tok)
                 self.server.record_event("AUTH", "Пароль сервера змінено")
                 self._send_json(200, {"ok": True})
+                return
+
+            if route == "/api/server/delete":
+                if self.server.store is None:
+                    self._send_json(503, {"ok": False, "error": "Видалення доступне тільки для серверів, створених у менеджері WiGi."})
+                    return
+                password = data.get("password")
+                confirmed_name = data.get("confirm_name")
+                remove_files = data.get("remove_workspace", False)
+                if not isinstance(password, str) or not self.server.profile.verify_password(password):
+                    time.sleep(0.25)
+                    self._send_json(403, {"ok": False, "error": "Невірний пароль сервера."})
+                    return
+                if not isinstance(confirmed_name, str) or confirmed_name != self.server.profile.name:
+                    self._send_json(400, {"ok": False, "error": "Введи точну назву сервера для підтвердження."})
+                    return
+                if not isinstance(remove_files, bool):
+                    self._send_json(400, {"ok": False, "error": "Некоректне значення для видалення файлів."})
+                    return
+                self.server.record_event("SYSTEM", f"Запит на видалення сервера '{self.server.profile.name}'")
+                if not self.server.schedule_delete(remove_workspace=remove_files):
+                    self._send_json(409, {"ok": False, "error": "Видалення вже виконується."})
+                    return
+                self._send_json(202, {"ok": True, "message": "Сервер зупиняється та видаляється.", "files_deleted": remove_files})
                 return
 
             if route == "/api/server/stop":
@@ -1277,6 +1328,16 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
               <button id="stopServerBtn" class="btn btn-danger" type="button">Зупинити сервер віддалено</button>
             </div>
           </div>
+          <form id="deleteServerForm" class="stat" style="margin-top:18px;border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.05);">
+            <strong style="color:#fca5a5;">Небезпечна зона · Видалити сервер</strong>
+            <p class="muted" style="font-size:12px;margin:9px 0;">Сервер зупиниться і зникне зі списку. Файли за замовчуванням залишаються. Для підтвердження введи точну назву та пароль.</p>
+            <label for="deleteConfirmName">Точна назва сервера</label>
+            <input id="deleteConfirmName" type="text" autocomplete="off" required placeholder="Назва сервера" />
+            <label for="deleteConfirmPw">Пароль сервера</label>
+            <input id="deleteConfirmPw" type="password" autocomplete="current-password" required placeholder="Пароль" />
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;margin:10px 0;"><input id="deleteRemoveFiles" type="checkbox" style="width:auto;" /> Назавжди видалити також робочу папку та всі файли</label>
+            <button id="deleteServerBtn" class="btn btn-danger" type="submit">Видалити сервер</button>
+          </form>
         </div>
       </div>
     </div>
@@ -1893,6 +1954,31 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
         document.getElementById("hdrStatus").textContent = "STOPPED";
         notify("Сервер зупинено");
       }}
+    }});
+
+    document.getElementById("deleteServerForm").addEventListener("submit", async (e) => {{
+      e.preventDefault();
+      if (!window.__lastStatus) await loadOverview();
+      const actualName = window.__lastStatus?.server?.name;
+      const confirm_name = document.getElementById("deleteConfirmName").value;
+      const password = document.getElementById("deleteConfirmPw").value;
+      const remove_workspace = document.getElementById("deleteRemoveFiles").checked;
+      if (!actualName || confirm_name !== actualName) return notify("Введи точну назву сервера.", true);
+      if (!confirm(remove_workspace
+        ? `НАЗАВЖДИ видалити сервер ${{actualName}} та ВСІ файли? Цю дію неможливо скасувати.`
+        : `Видалити сервер ${{actualName}} зі списку? Файли залишаться.`)) return;
+      const btn = document.getElementById("deleteServerBtn");
+      btn.disabled = true;
+      try {{
+        const {{ data }} = await api("api/server/delete", {{
+          method: "POST", body: JSON.stringify({{ confirm_name, password, remove_workspace }})
+        }});
+        if (!data.ok) {{ notify(data.error, true); btn.disabled = false; return; }}
+        setToken("");
+        document.getElementById("deleteConfirmPw").value = "";
+        document.getElementById("hdrStatus").textContent = "DELETING";
+        notify("Сервер зупиняється та видаляється. Повернись у термінальне меню.");
+      }} catch (err) {{ notify("Не вдалося видалити: " + err.message, true); btn.disabled = false; }}
     }});
 
     // Auth lifecycle

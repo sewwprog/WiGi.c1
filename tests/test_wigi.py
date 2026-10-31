@@ -483,3 +483,70 @@ class TestDesktopMotion(unittest.TestCase):
             self.assertIn('function minimizeWin', html)
             self.assertIn('function morphWindow', html)
             self.assertIn('motion-toggle', html)
+
+class TestServerDeletionAPI(unittest.TestCase):
+    def test_delete_running_server_requires_password_name_and_explicit_file_choice(self) -> None:
+        for remove_files in (False, True):
+            with self.subTest(remove_files=remove_files), tempfile.TemporaryDirectory() as tmpdir:
+                base = Path(tmpdir)
+                store = ServerStore(servers_file=base/'data/servers.json', workspaces_dir=base/'servers')
+                profile = store.create_server('Delete Me', 'correct password')
+                workspace = store.ensure_workspace(profile)
+                marker = workspace/'important.txt'
+                marker.write_text('keep me', encoding='utf-8')
+                httpd = WiGiHTTPServer(('127.0.0.1', 0), profile, workspace, quiet=True, store=store)
+                thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+                thread.start()
+                base_url = f'http://127.0.0.1:{httpd.server_address[1]}'
+
+                def post(path: str, data: dict, token: str = '') -> tuple[int, dict]:
+                    headers = {'Content-Type': 'application/json'}
+                    if token:
+                        headers['Authorization'] = 'Bearer '+token
+                    req = urllib.request.Request(base_url+path, data=json.dumps(data).encode(), headers=headers)
+                    try:
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            return resp.status, json.load(resp)
+                    except urllib.error.HTTPError as exc:
+                        with exc:
+                            return exc.code, json.load(exc)
+
+                try:
+                    _, result = post('/api/login', {'password': 'correct password'})
+                    token = result['token']
+                    payload = {'password':'correct password', 'confirm_name':'Delete Me', 'remove_workspace':remove_files}
+                    self.assertEqual(post('/api/server/delete', payload)[0], 401)
+                    self.assertEqual(post('/api/server/delete', {**payload, 'password':'wrong'}, token)[0], 403)
+                    self.assertEqual(post('/api/server/delete', {**payload, 'confirm_name':'delete me'}, token)[0], 400)
+                    self.assertEqual(post('/api/server/delete', {**payload, 'remove_workspace':'false'}, token)[0], 400)
+                    self.assertIsNotNone(store.get_by_id(profile.id))
+                    self.assertEqual(post('/api/server/delete', payload, token)[0], 202)
+                    thread.join(timeout=5)
+                    self.assertFalse(thread.is_alive(), 'HTTP server should stop after deletion')
+                    # The deletion worker may finish its registry update after shutdown returns.
+                    for _ in range(100):
+                        if store.get_by_id(profile.id) is None:
+                            break
+                        threading.Event().wait(.02)
+                    self.assertIsNone(store.get_by_id(profile.id))
+                    self.assertEqual(marker.exists(), not remove_files)
+                finally:
+                    httpd.shutdown()
+                    httpd.server_close()
+                    thread.join(timeout=3)
+
+    def test_cannot_delete_workspace_via_tampered_slug(self) -> None:
+        from dataclasses import asdict
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            store = ServerStore(servers_file=base/'data/servers.json', workspaces_dir=base/'servers')
+            profile = store.create_server('Safe', 'pw')
+            outside = base/'outside'
+            outside.mkdir()
+            (outside/'keep.txt').write_text('untouched', encoding='utf-8')
+            profile.slug = '../outside'
+            store._save_raw([asdict(profile)])
+            with self.assertRaises(ValueError):
+                store.delete_server(profile.id, remove_workspace=True)
+            self.assertTrue((outside/'keep.txt').exists())
+            self.assertIsNotNone(store.get_by_id(profile.id))
