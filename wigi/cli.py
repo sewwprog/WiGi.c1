@@ -192,7 +192,7 @@ def run_server_blocking(
     print()
     print(f"{GREEN}{BOLD}------------------------------------------------------------{RESET}")
     print(f"  {GREEN}●{RESET} {BOLD}Сервер активний:{RESET} {updated.name}")
-    print(f"  {BOLD}Локально (цей ноут):{RESET}  http://127.0.0.1:{port}")
+    print(f"  {BOLD}Браузер (цей ноут):{RESET}   http://localhost:{port}")
     print(f"  {BOLD}У локальній мережі:{RESET}   http://{lan_ip}:{port}")
     print(f"  {BOLD}Папка середовища:{RESET}     {workspace_dir}")
     print(f"{GREEN}{BOLD}------------------------------------------------------------{RESET}")

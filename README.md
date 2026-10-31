@@ -2,7 +2,22 @@
 
 Термінальний менеджер та Python-сервер, який запускається на ноутбуці або будь-якій машині, де встановлено Python 3.10+. Не потребує сторонніх бібліотек — працює одразу після клонування.
 
-## Швидкий старт у терміналі
+## Запуск прямо з GitHub в Ubuntu (WSL на Windows / Linux)
+
+Відкрий термінал **Ubuntu** на Windows і встав одну команду (вона сама скачає репозиторій або оновить його з GitHub до свіжої версії та відкриє меню):
+
+```bash
+git clone https://github.com/sewwprog/WiGi.c1.git ~/WiGi.c1 2>/dev/null || git -C ~/WiGi.c1 pull; cd ~/WiGi.c1 && python3 main.py
+```
+
+Або через вбудований авто-скрипт `run.sh` (після мерджу в `main`):
+```bash
+curl -fsSL https://raw.githubusercontent.com/sewwprog/WiGi.c1/main/run.sh | bash
+```
+
+Коли сервер запуститься в Ubuntu (WSL), просто відкрий у звичайному браузері Windows **`http://localhost:8000`** (або затисни `Ctrl` і клікни на посилання прямо в терміналі).
+
+## Швидкий старт у терміналі (вручну)
 
 ```bash
 python3 main.py
