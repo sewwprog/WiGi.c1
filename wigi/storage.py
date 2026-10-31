@@ -182,9 +182,21 @@ class ServerStore:
             notes_md = ws / "notes.md"
             if not notes_md.exists():
                 notes_md.write_text(
-                    f"# {profile.name}\n\nРобоче середовище сервера `{profile.slug}`.\n",
+                    f"# {profile.name}\n\nРобоче середовище сервера `{profile.slug}`.\n\n"
+                    "- Python-скрипт: `hello.py`\n"
+                    "- Веб-додаток HTML: `web_demo/index.html`\n",
                     encoding="utf-8",
                 )
+            try:
+                from wigi.workspace import create_project_template
+                from wigi.sites import create_site
+
+                if not (ws / "web_demo").exists():
+                    create_project_template(ws, "html-app", "web_demo")
+                if not (ws / ".wigi_sites.json").exists():
+                    create_site(ws, domain="nexus.wigi", title="Nexus Studio", template="landing")
+            except Exception:
+                pass
         return ws
 
     def create_server(

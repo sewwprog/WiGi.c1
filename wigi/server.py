@@ -18,7 +18,9 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from wigi.network import get_lan_ip, get_system_metrics
+from wigi import sites as sites_ops
 from wigi.storage import ServerProfile, ServerStore
+from wigi.webos import render_webos_html
 from wigi import workspace as ws_ops
 
 MAX_JSON_BODY = 36 * 1024 * 1024  # 36 MB (supports base64 uploads up to 25 MB)
@@ -132,12 +134,25 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         return forwarded or self.client_address[0]
 
+    def _cookie_flags(self) -> str:
+        proto = self.headers.get("X-Forwarded-Proto", "").lower()
+        if proto == "https":
+            return "HttpOnly; Path=/; SameSite=None; Secure"
+        return "HttpOnly; Path=/; SameSite=Lax"
+
     def _extract_token(self) -> str | None:
         auth = self.headers.get("Authorization", "")
         if auth.lower().startswith("bearer "):
             token = auth[7:].strip()
             if token:
                 return token
+
+        parsed = urlparse(self.path)
+        if parsed.query:
+            qs = parse_qs(parsed.query)
+            q_tok = (qs.get("token", [""])[0] or "").strip()
+            if q_tok:
+                return q_tok
 
         raw_cookie = self.headers.get("Cookie")
         if raw_cookie:
@@ -204,6 +219,37 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(raw)
 
+    def _send_inline_file(self, filename: str, raw: bytes, set_token_cookie: str | None = None) -> None:
+        mime, _ = mimetypes.guess_type(filename)
+        content_type = mime or "application/octet-stream"
+        if content_type.startswith("text/") and "charset=" not in content_type:
+            content_type += "; charset=utf-8"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        if set_token_cookie:
+            self.send_header(
+                "Set-Cookie",
+                f"wigi_session={set_token_cookie}; Max-Age=86400; {self._cookie_flags()}",
+            )
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(raw)
+
+    def _send_site_response(self, status: int, filename: str, raw: bytes) -> None:
+        mime, _ = mimetypes.guess_type(filename)
+        content_type = mime or "application/octet-stream"
+        if content_type.startswith("text/") and "charset=" not in content_type:
+            content_type += "; charset=utf-8"
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(raw)
+
     def _read_json_body(self) -> dict[str, Any] | None:
         length_str = self.headers.get("Content-Length", "0")
         try:
@@ -230,6 +276,49 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         route = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
 
+        # 1. Virtual Host routing by HTTP Host header (custom domains, *.localhost, *.nip.io)
+        host_hdr = self.headers.get("Host", "")
+        vhost_site = sites_ops.resolve_vhost_request(
+            self.server.workspace_dir,
+            host_hdr,
+            server_hostname=self.server.hostname,
+        )
+        if vhost_site is not None:
+            status_code, fname, raw_bytes = sites_ops.serve_site_file(
+                self.server.workspace_dir,
+                vhost_site,
+                parsed.path,
+            )
+            self._send_site_response(status_code, fname, raw_bytes)
+            return
+
+        # 2. Universal public site gateway: /s/<domain>/...
+        if parsed.path.startswith("/s/"):
+            rest = parsed.path[3:]
+            if "/" not in rest:
+                # Redirect /s/<domain> -> /s/<domain>/ so relative CSS/JS assets resolve cleanly
+                dom_only = rest.strip()
+                if dom_only:
+                    self.send_response(302)
+                    self.send_header("Location", f"/s/{quote(dom_only)}/")
+                    self.end_headers()
+                    return
+            dom_part, _, sub_path = rest.partition("/")
+            site = sites_ops.get_site_by_domain(self.server.workspace_dir, dom_part)
+            if site is None:
+                self._send_html(
+                    404,
+                    f"<!DOCTYPE html><html lang='uk'><body style='background:#090d16;color:#e2e8f0;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='text-align:center;'><h2>Домен {html.escape(dom_part)} не знайдено</h2><p style='color:#94a3b8;'>Створи його у додатку «Сайти та Домени» в WiGi OS.</p></div></body></html>",
+                )
+                return
+            status_code, fname, raw_bytes = sites_ops.serve_site_file(
+                self.server.workspace_dir,
+                site,
+                sub_path,
+            )
+            self._send_site_response(status_code, fname, raw_bytes)
+            return
+
         if route == "/favicon.ico":
             self.send_response(204)
             self.send_header("Content-Length", "0")
@@ -238,6 +327,10 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
 
         if route == "/":
             self._send_html(200, _render_index_html(self.server))
+            return
+
+        if route == "/os":
+            self._send_html(200, render_webos_html(self.server))
             return
 
         if route == "/api/info":
@@ -330,9 +423,54 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "repos": repos})
             return
 
+        if route == "/api/sites":
+            port = self.server.server_address[1]
+            sites = sites_ops.list_sites(self.server.workspace_dir)
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "sites": sites,
+                    "port": port,
+                    "lan_ip": self.server.lan_ip,
+                },
+            )
+            return
+
         if route == "/api/env":
             env_vars = ws_ops.load_env_vars(self.server.workspace_dir)
             self._send_json(200, {"ok": True, "env": env_vars})
+            return
+
+        if route == "/api/os/state":
+            state = ws_ops.load_os_state(self.server.workspace_dir)
+            self._send_json(200, {"ok": True, "state": state})
+            return
+
+        if route == "/api/os/processes":
+            procs = ws_ops.list_host_processes()
+            self._send_json(200, {"ok": True, "processes": procs})
+            return
+
+        if route == "/api/os/search":
+            files = ws_ops.list_all_files_flat(self.server.workspace_dir)
+            self._send_json(200, {"ok": True, "files": files})
+            return
+
+        if route.startswith("/workspace/"):
+            rel_path = parsed.path[len("/workspace/") :].strip("/")
+            try:
+                target = ws_ops.resolve_safe_path(self.server.workspace_dir, rel_path)
+                if target.is_dir():
+                    target = target / "index.html"
+                filename, raw = ws_ops.read_binary_file(
+                    self.server.workspace_dir,
+                    ws_ops.to_rel_posix(self.server.workspace_dir, target),
+                )
+                q_tok = (qs.get("token", [""])[0] or "").strip() or None
+                self._send_inline_file(filename, raw, set_token_cookie=q_tok)
+            except ValueError as exc:
+                self._send_json(404, {"ok": False, "error": str(exc)})
             return
 
         self._send_json(404, {"ok": False, "error": "Маршрут не знайдено."})
@@ -356,7 +494,7 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
 
             token = self.server.create_session(client_ip=client_ip)
             self.server.record_event("AUTH", f"Успішний вхід на сервер з {client_ip}")
-            cookie_val = f"wigi_session={token}; HttpOnly; Path=/; Max-Age=86400; SameSite=Lax"
+            cookie_val = f"wigi_session={token}; Max-Age=86400; {self._cookie_flags()}"
             self._send_json(
                 200,
                 {"ok": True, "token": token, "name": self.server.profile.name},
@@ -367,7 +505,7 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         if route == "/api/logout":
             token = self._extract_token()
             self.server.revoke_session(token)
-            cookie_val = "wigi_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax"
+            cookie_val = f"wigi_session=; Max-Age=0; {self._cookie_flags()}"
             self._send_json(
                 200,
                 {"ok": True},
@@ -489,6 +627,63 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
                 saved_env = ws_ops.save_env_vars(self.server.workspace_dir, raw_env)
                 self.server.record_event("CONFIG", f"Оновлено змінні середовища ({len(saved_env)} шт.)")
                 self._send_json(200, {"ok": True, "env": saved_env})
+                return
+
+            if route == "/api/os/state":
+                saved_state = ws_ops.save_os_state(self.server.workspace_dir, data)
+                self._send_json(200, {"ok": True, "state": saved_state})
+                return
+
+            if route == "/api/os/template":
+                kind = str(data.get("kind", "python-app"))
+                name = str(data.get("name", ""))
+                created = ws_ops.create_project_template(self.server.workspace_dir, kind=kind, name=name)
+                self.server.record_event("OS", f"Створено проєкт '{created['name']}' ({kind})")
+                self._send_json(200, {"ok": True, **created})
+                return
+
+            if route == "/api/sites/create":
+                domain = str(data.get("domain", ""))
+                title = str(data.get("title", ""))
+                template = str(data.get("template", "landing"))
+                folder = str(data.get("folder", ""))
+                accent = str(data.get("accent", "#38bdf8"))
+                site = sites_ops.create_site(
+                    self.server.workspace_dir,
+                    domain=domain,
+                    title=title,
+                    template=template,
+                    folder=folder,
+                    accent=accent,
+                )
+                self.server.record_event("DOMAIN", f"Запущено сайт '{site['title']}' на домені {site['domain']}")
+                self._send_json(200, {"ok": True, "site": site})
+                return
+
+            if route == "/api/sites/update":
+                site_id = str(data.get("id", ""))
+                new_dom = data.get("domain")
+                new_title = data.get("title")
+                enabled = data.get("enabled")
+                updated = sites_ops.update_site(
+                    self.server.workspace_dir,
+                    site_id=site_id,
+                    domain=str(new_dom) if new_dom is not None else None,
+                    title=str(new_title) if new_title is not None else None,
+                    enabled=bool(enabled) if enabled is not None else None,
+                )
+                state_lbl = "ON" if updated.get("enabled") else "OFF"
+                self.server.record_event("DOMAIN", f"Оновлено домен {updated['domain']} [{state_lbl}]")
+                self._send_json(200, {"ok": True, "site": updated})
+                return
+
+            if route == "/api/sites/delete":
+                site_id = str(data.get("id", ""))
+                delete_files = bool(data.get("delete_files", False))
+                ok_del = sites_ops.delete_site(self.server.workspace_dir, site_id=site_id, delete_files=delete_files)
+                if ok_del:
+                    self.server.record_event("DOMAIN", f"Видалено прив'язку домену ({site_id})")
+                self._send_json(200, {"ok": True, "deleted": ok_del})
                 return
 
             if route == "/api/sessions/revoke-others":
@@ -855,7 +1050,8 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
           <h1 id="hdrTitle">{safe_name}</h1>
           <div class="sub" id="hdrSub">{safe_desc} &bull; Хост: {safe_host}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <a id="launchOsTopBtn" href="os" class="btn btn-sm hidden" style="text-decoration:none; background:linear-gradient(135deg,#38bdf8,#a855f7); color:#05101e;">🖥 Запустити WiGi OS</a>
           <span class="badge"><span class="dot"></span> <span id="hdrStatus">ONLINE</span></span>
           <button id="logoutBtn" class="btn btn-ghost btn-sm hidden" type="button">Вийти</button>
         </div>
@@ -873,6 +1069,10 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
 
       <!-- AUTHENTICATED WORKSPACE -->
       <div id="appView" class="hidden">
+        <div style="margin:18px 0;padding:16px 19px;border:1px solid rgba(56,189,248,.35);border-radius:13px;background:linear-gradient(100deg,#12273a,#1c1740);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div><strong style="font-size:15px;">◈ Сайти та Домени</strong><div class="muted" style="font-size:12px;margin-top:4px;">Створюй HTML/CSS/JS сайти, керуй доменами та публікуй прямо з WiGi OS.</div></div>
+          <a href="os" class="btn" style="text-decoration:none;">Відкрити студію сайтів ↗</a>
+        </div>
         <div class="tabs">
           <button class="tab-btn active" data-tab="overview" type="button">Огляд системи</button>
           <button class="tab-btn" data-tab="files" type="button">Файли та Код</button>
@@ -883,6 +1083,14 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
 
         <!-- TAB 1: OVERVIEW -->
         <div id="tab-overview" class="tab-pane">
+          <div style="background:linear-gradient(135deg,rgba(56,189,248,0.14),rgba(168,85,247,0.16)); border:1px solid rgba(56,189,248,0.4); border-radius:12px; padding:16px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+            <div>
+              <div style="font-size:16px; font-weight:800; margin-bottom:4px;">🖥 Розширення WiGi OS — Веб-Операційна Система</div>
+              <div class="muted" style="font-size:13px;">Повноцінний робочий стіл у браузері: Code Studio IDE, Термінал, Провідник, GitHub Studio, Kanban-дошка, Нотатки та Веб-Ранер HTML-додатків.</div>
+            </div>
+            <a href="os" class="btn" style="text-decoration:none; background:linear-gradient(135deg,#38bdf8,#a855f7); color:#05101e; padding:10px 18px;">🚀 Відкрити WiGi OS</a>
+          </div>
+
           <div class="grid">
             <div class="stat">
               <div class="stat-k">Сервер / ID</div>
@@ -1068,7 +1276,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
   <div id="toast" class="toast hidden"></div>
 
   <script>
-    const TOKEN_KEY = "wigi_token_" + location.pathname;
+    const TOKEN_KEY = "wigi_auth_token";
     function getToken() {{
       try {{ return sessionStorage.getItem(TOKEN_KEY) || ""; }} catch (_) {{ return window.__wigiToken || ""; }}
     }}
@@ -1151,6 +1359,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
         loginView.classList.add("hidden");
         appView.classList.remove("hidden");
         logoutBtn.classList.remove("hidden");
+        document.getElementById("launchOsTopBtn").classList.remove("hidden");
 
         document.getElementById("hdrTitle").textContent = data.server.name;
         document.getElementById("hdrSub").textContent = `${{data.server.description || "Персональне Python-середовище сервера"}} • Хост: ${{data.host.hostname}}`;
@@ -1362,7 +1571,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
         body: JSON.stringify({{ file: currentEditingPath }})
       }});
       if (!data.ok) {{ outEl.textContent = "Помилка: " + data.error; return; }}
-      outEl.textContent = (data.stdout || "") + (data.stderr ? "\n" + data.stderr : "") + `\n[код виходу: ${{data.exit_code}}, ${{data.duration_ms}} мс]`;
+      outEl.textContent = (data.stdout || "") + (data.stderr ? "\\n" + data.stderr : "") + `\\n[код виходу: ${{data.exit_code}}, ${{data.duration_ms}} мс]`;
     }});
 
     document.getElementById("upDirBtn").addEventListener("click", () => loadFiles(currentParentDir));
@@ -1421,18 +1630,18 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
 
     async function execShell(cmd) {{
       const cwd = document.getElementById("termCwd").value.trim();
-      appendTerm(`\n${{cwd ? "[" + cwd + "] " : ""}}$ ${{cmd}}\n`);
+      appendTerm(`\\n${{cwd ? "[" + cwd + "] " : ""}}$ ${{cmd}}\\n`);
       const {{ data }} = await api("api/exec", {{
         method: "POST",
         body: JSON.stringify({{ command: cmd, cwd }})
       }});
       if (!data.ok) {{
-        appendTerm(`Помилка: ${{data.error}}\n`);
+        appendTerm(`Помилка: ${{data.error}}\\n`);
         return;
       }}
-      if (data.stdout) appendTerm(data.stdout.endsWith("\n") ? data.stdout : data.stdout + "\n");
-      if (data.stderr) appendTerm(data.stderr.endsWith("\n") ? data.stderr : data.stderr + "\n");
-      appendTerm(`[exit=${{data.exit_code}} • ${{data.duration_ms}} ms]\n`);
+      if (data.stdout) appendTerm(data.stdout.endsWith("\\n") ? data.stdout : data.stdout + "\\n");
+      if (data.stderr) appendTerm(data.stderr.endsWith("\\n") ? data.stderr : data.stderr + "\\n");
+      appendTerm(`[exit=${{data.exit_code}} • ${{data.duration_ms}} ms]\\n`);
     }}
 
     document.getElementById("termForm").addEventListener("submit", async (e) => {{
@@ -1465,15 +1674,15 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
     document.getElementById("runSnippetBtn").addEventListener("click", async () => {{
       const code = document.getElementById("pySnippet").value;
       if (!code.trim()) return notify("Введи Python-код", true);
-      appendTerm("\n>>> [Виконання Python-фрагмента]\n");
+      appendTerm("\\n>>> [Виконання Python-фрагмента]\\n");
       const {{ data }} = await api("api/python/run", {{
         method: "POST",
         body: JSON.stringify({{ code }})
       }});
-      if (!data.ok) return appendTerm(`Помилка: ${{data.error}}\n`);
-      if (data.stdout) appendTerm(data.stdout.endsWith("\n") ? data.stdout : data.stdout + "\n");
-      if (data.stderr) appendTerm(data.stderr.endsWith("\n") ? data.stderr : data.stderr + "\n");
-      appendTerm(`[exit=${{data.exit_code}} • ${{data.duration_ms}} ms]\n`);
+      if (!data.ok) return appendTerm(`Помилка: ${{data.error}}\\n`);
+      if (data.stdout) appendTerm(data.stdout.endsWith("\\n") ? data.stdout : data.stdout + "\\n");
+      if (data.stderr) appendTerm(data.stderr.endsWith("\\n") ? data.stderr : data.stderr + "\\n");
+      appendTerm(`[exit=${{data.exit_code}} • ${{data.duration_ms}} ms]\\n`);
     }});
 
     // Git / GitHub Manager
@@ -1564,7 +1773,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
           lines.push("Останні коміти:");
           repo.commits.slice(0, 4).forEach(c => lines.push(`  ${{c.hash}} • ${{c.subject}} (${{c.when}})`));
         }}
-        info.textContent = lines.join("\n");
+        info.textContent = lines.join("\\n");
         info.style.whiteSpace = "pre-wrap";
         card.appendChild(info);
         box.appendChild(card);
@@ -1618,7 +1827,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
       const {{ data }} = await api("api/env");
       if (data.ok) {{
         const lines = Object.entries(data.env || {{}}).map(([k, v]) => `${{k}}=${{v}}`);
-        document.getElementById("envEditor").value = lines.join("\n");
+        document.getElementById("envEditor").value = lines.join("\\n");
       }}
     }}
 
@@ -1651,7 +1860,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
     }});
 
     document.getElementById("saveEnvBtn").addEventListener("click", async () => {{
-      const raw = document.getElementById("envEditor").value.split("\n");
+      const raw = document.getElementById("envEditor").value.split("\\n");
       const env = {{}};
       for (const line of raw) {{
         const trimmed = line.trim();
@@ -1682,6 +1891,7 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
       if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
       appView.classList.add("hidden");
       logoutBtn.classList.add("hidden");
+      document.getElementById("launchOsTopBtn").classList.add("hidden");
       loginView.classList.remove("hidden");
       document.getElementById("pwInput").focus();
     }}

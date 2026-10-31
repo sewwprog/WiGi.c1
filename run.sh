@@ -12,9 +12,9 @@ fi
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Оновлюю WiGi з GitHub ($BRANCH)..."
-  git -C "$INSTALL_DIR" fetch origin "$BRANCH" --quiet || true
-  git -C "$INSTALL_DIR" checkout "$BRANCH" --quiet 2>/dev/null || true
-  git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" || true
+  if git -C "$INSTALL_DIR" fetch origin "$BRANCH" --quiet; then
+    git -C "$INSTALL_DIR" checkout -B "$BRANCH" FETCH_HEAD --quiet
+  fi
 else
   echo "Завантажую WiGi з GitHub у $INSTALL_DIR..."
   git clone --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"

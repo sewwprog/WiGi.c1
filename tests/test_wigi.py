@@ -182,10 +182,16 @@ class TestHTTPServerFullAPI(unittest.TestCase):
             try:
                 base_url = f"http://127.0.0.1:{port}"
 
-                # HEAD / healthcheck
+                # HEAD / and GET /os healthcheck
                 head_req = urllib.request.Request(f"{base_url}/", method="HEAD")
                 with urllib.request.urlopen(head_req) as resp:
                     self.assertEqual(resp.status, 200)
+
+                with urllib.request.urlopen(f"{base_url}/os") as os_resp:
+                    os_html = os_resp.read().decode("utf-8")
+                    self.assertEqual(os_resp.status, 200)
+                    self.assertIn("WiGi OS", os_html)
+                    self.assertIn("Code Studio", os_html)
 
                 # Unauthenticated /api/files -> 401
                 with self.assertRaises(urllib.error.HTTPError) as unauth_ctx:
@@ -231,7 +237,7 @@ class TestHTTPServerFullAPI(unittest.TestCase):
                 self.assertTrue(py_res["ok"])
                 self.assertEqual(py_res["stdout"].strip(), "42")
 
-                # Shell exec via API
+                # Shell exec via API + stateful cd inside workspace
                 sh_res = post_json("/api/exec", {"command": "echo wigi-ok"})
                 self.assertEqual(sh_res["stdout"].strip(), "wigi-ok")
 
@@ -240,6 +246,34 @@ class TestHTTPServerFullAPI(unittest.TestCase):
                 self.assertTrue(git_res["ok"])
                 repos_res = get_json("/api/git/repos")
                 self.assertEqual(len(repos_res["repos"]), 1)
+
+                cd_res = post_json("/api/exec", {"command": "cd demo-repo"})
+                self.assertEqual(cd_res["cwd"], "demo-repo")
+
+                # WiGi OS state, templates, search, processes, and /workspace/ static serving
+                os_st = post_json(
+                    "/api/os/state",
+                    {
+                        "theme": "nebula",
+                        "sticky_note": "My OS note",
+                        "tasks": [{"id": "1", "title": "Ship OS", "col": "doing", "priority": "high"}],
+                    },
+                )
+                self.assertTrue(os_st["ok"])
+                self.assertEqual(os_st["state"]["theme"], "nebula")
+
+                tpl = post_json("/api/os/template", {"kind": "html-app", "name": "live-ui"})
+                self.assertTrue(tpl["ok"])
+                self.assertEqual(tpl["entry"], "live-ui/index.html")
+
+                with urllib.request.urlopen(f"{base_url}/workspace/live-ui/index.html?token={token}") as w_resp:
+                    self.assertEqual(w_resp.status, 200)
+                    self.assertIn("live-ui", w_resp.read().decode("utf-8"))
+
+                procs = get_json("/api/os/processes")
+                self.assertTrue(procs["ok"])
+                search_res = get_json("/api/os/search")
+                self.assertTrue(any(f["path"] == "live-ui/index.html" for f in search_res["files"]))
 
                 # Update server settings via API & check persistence
                 cfg_res = post_json(
@@ -265,3 +299,103 @@ class TestHTTPServerFullAPI(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestSiteHosting(unittest.TestCase):
+    def test_custom_domains_gateway_host_header_and_auth(self) -> None:
+        from wigi import sites as sites_ops
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            store = ServerStore(servers_file=root / 'data/servers.json', workspaces_dir=root / 'servers')
+            profile = store.create_server('Sites Test', 'secret', port=8000)
+            ws = store.ensure_workspace(profile)
+            self.assertTrue((ws / '.wigi_sites.json').exists())
+            httpd = WiGiHTTPServer(('127.0.0.1', 0), profile, ws, quiet=True, store=store)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            base = f'http://127.0.0.1:{httpd.server_address[1]}'
+            def request(path: str, host: str | None = None, token: str = '', payload: dict | None = None):
+                headers = {'Content-Type': 'application/json'}
+                if host: headers['Host'] = host
+                if token: headers['Authorization'] = 'Bearer ' + token
+                req = urllib.request.Request(base + path, headers=headers,
+                    data=json.dumps(payload).encode() if payload is not None else None,
+                    method='POST' if payload is not None else 'GET')
+                try:
+                    with urllib.request.urlopen(req) as response:
+                        return response.status, response.read(), dict(response.headers)
+                except urllib.error.HTTPError as exc:
+                    with exc:
+                        return exc.code, exc.read(), dict(exc.headers)
+            try:
+                status, data, _ = request('/api/sites')
+                self.assertEqual(status, 401)
+                status, data, _ = request('/api/login', payload={'password':'secret'})
+                token = json.loads(data)['token']
+                status, data, _ = request('/api/sites/create', token=token, payload={
+                    'domain': 'myshop.ua', 'title':'My Shop', 'template':'store'})
+                self.assertEqual(status, 200)
+                site = json.loads(data)['site']
+                self.assertTrue((ws / site['folder'] / 'style.css').exists())
+                status, body, _ = request('/s/myshop.ua/')
+                self.assertEqual(status, 200)
+                self.assertIn(b'My Shop', body)
+                status, css, h = request('/s/myshop.ua/style.css')
+                self.assertEqual(status, 200)
+                self.assertIn('text/css', h['Content-Type'])
+                self.assertTrue(css)
+                for host in ('myshop.ua', 'www.myshop.ua', 'myshop-ua.localhost', 'myshop-ua.127.0.0.1.nip.io'):
+                    self.assertEqual(request('/', host=host)[0], 200, host)
+                self.assertEqual(request('/.wigi_sites.json', host='myshop.ua')[0], 404)
+                self.assertEqual(request('/%2e%2e/%2e%2e/server.json', host='myshop.ua')[0], 404)
+                self.assertGreater(sites_ops.get_site_by_domain(ws,'myshop.ua')['visits'], 0)
+                status, data, _ = request('/api/sites/update', token=token, payload={'id': site['id'], 'enabled':False})
+                self.assertEqual(status, 200)
+                self.assertEqual(request('/s/myshop.ua/')[0], 503)
+                self.assertEqual(request('/', host='myshop.ua')[0], 503)
+                status, data, _ = request('/api/sites/delete', token=token, payload={'id':site['id']})
+                self.assertEqual(status, 200)
+                self.assertTrue((ws / site['folder'] / 'index.html').exists())
+                self.assertEqual(request('/s/myshop.ua/')[0], 404)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join(timeout=3)
+
+    def test_os_and_panel_scripts_parse(self) -> None:
+        import re
+        import shutil
+        import subprocess
+        from wigi.webos import render_webos_html
+        from wigi.server import _render_index_html
+        if shutil.which('node') is None:
+            self.skipTest('node not installed')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            store = ServerStore(servers_file=root / 'data/s.json', workspaces_dir=root / 'servers')
+            profile = store.create_server('Scripts', 'secret')
+            srv = WiGiHTTPServer(('127.0.0.1', 0), profile, store.ensure_workspace(profile), quiet=True)
+            try:
+                for i, html in enumerate((_render_index_html(srv), render_webos_html(srv))):
+                    script = re.findall(r'<script[^>]*>(.*?)</script>', html, flags=re.S)[0]
+                    path = root / f'script-{i}.js'
+                    path.write_text(script, encoding='utf-8')
+                    result = subprocess.run(['node', '--check', str(path)], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+            finally:
+                srv.server_close()
+
+    def test_all_website_templates_emit_valid_javascript(self) -> None:
+        import shutil
+        import subprocess
+        from wigi.sites import TEMPLATE_CHOICES, create_site
+        if shutil.which('node') is None:
+            self.skipTest('node not installed')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for index, template in enumerate(TEMPLATE_CHOICES):
+                site = create_site(root, f'template{index}.wigi', template=template)
+                folder = root / site['folder']
+                self.assertTrue((folder / 'index.html').exists())
+                for script in folder.glob('*.js'):
+                    result = subprocess.run(['node', '--check', str(script)], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, f'{template}: {result.stderr}')

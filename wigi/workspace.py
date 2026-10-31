@@ -18,6 +18,9 @@ import time
 from typing import Any
 
 ENV_FILENAME = ".wigi_env.json"
+OS_STATE_FILENAME = ".wigi_os.json"
+SITES_STATE_FILENAME = ".wigi_sites.json"
+HIDDEN_SYSTEM_FILES = {ENV_FILENAME, OS_STATE_FILENAME, SITES_STATE_FILENAME}
 MAX_TEXT_BYTES = 2 * 1024 * 1024     # 2 MB text editor cap
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB upload cap
 MAX_OUTPUT_CHARS = 120_000
@@ -104,7 +107,7 @@ def list_directory(workspace_dir: Path, rel_path: str = "") -> dict[str, Any]:
 
     items: list[dict[str, Any]] = []
     for entry in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
-        if entry.name == ENV_FILENAME:
+        if entry.name in HIDDEN_SYSTEM_FILES or entry.name.startswith(".wigi_run_"):
             continue
         try:
             st = entry.stat()
@@ -268,15 +271,21 @@ def run_shell_command(
     cmd = command.strip()
     if not cmd:
         raise ValueError("Команда порожня.")
+    base = workspace_dir.resolve()
     cwd = resolve_safe_path(workspace_dir, rel_cwd)
     if not cwd.exists() or not cwd.is_dir():
-        cwd = workspace_dir.resolve()
+        cwd = base
+
+    wrapped_cmd = cmd
+    marker = "__WIGI_CWD__="
+    if os.name != "nt":
+        wrapped_cmd = f"{cmd}\n__wigi_ec=$?\nprintf '\\n{marker}%s\\n' \"$PWD\"\nexit $__wigi_ec"
 
     timeout_clamped = max(1, min(int(timeout_sec), 120))
     started = time.perf_counter()
     try:
         completed = subprocess.run(
-            cmd,
+            wrapped_cmd,
             shell=True,
             cwd=str(cwd),
             env=_build_process_env(workspace_dir),
@@ -288,13 +297,28 @@ def run_shell_command(
             timeout=timeout_clamped,
         )
         duration_ms = int((time.perf_counter() - started) * 1000)
+        stdout_txt = completed.stdout
+        resulting_cwd = cwd
+
+        if os.name != "nt" and marker in stdout_txt:
+            idx = stdout_txt.rfind(marker)
+            prefix = stdout_txt[:idx]
+            if prefix.endswith("\n"):
+                prefix = prefix[:-1]
+            tail = stdout_txt[idx + len(marker) :].splitlines()
+            if tail:
+                cand = Path(tail[0].strip()).resolve()
+                if cand == base or base in cand.parents:
+                    resulting_cwd = cand
+            stdout_txt = prefix
+
         return {
             "exit_code": completed.returncode,
-            "stdout": _truncate_output(completed.stdout),
+            "stdout": _truncate_output(stdout_txt),
             "stderr": _truncate_output(completed.stderr),
             "duration_ms": duration_ms,
             "timed_out": False,
-            "cwd": to_rel_posix(workspace_dir, cwd),
+            "cwd": to_rel_posix(workspace_dir, resulting_cwd),
         }
     except subprocess.TimeoutExpired as exc:
         duration_ms = int((time.perf_counter() - started) * 1000)
@@ -598,4 +622,238 @@ def git_action(
         "exit_code": res.returncode,
         "output": output or "(виконано без виводу)",
         "repo": _inspect_single_repo(workspace_dir, repo_dir),
+    }
+
+
+# ---------------------------------------------------------------------------
+# WiGi OS Extension State, Flat Search, Process Monitor & Project Templates
+# ---------------------------------------------------------------------------
+
+def _default_os_state() -> dict[str, Any]:
+    return {
+        "theme": "cyber",
+        "sticky_note": "Швидкі нотатки сервера...\n• Ctrl+K — швидкий пошук\n• Ctrl+S — зберегти код",
+        "tasks": [
+            {"id": "t1", "title": "Клонувати або створити Git-репозиторій", "col": "todo", "priority": "high"},
+            {"id": "t2", "title": "Написати та запустити Python-скрипт у Code Studio", "col": "doing", "priority": "normal"},
+            {"id": "t3", "title": "Підняти власне серверне середовище WiGi", "col": "done", "priority": "normal"},
+        ],
+    }
+
+
+def load_os_state(workspace_dir: Path) -> dict[str, Any]:
+    state = _default_os_state()
+    state_file = workspace_dir / OS_STATE_FILENAME
+    if state_file.exists():
+        try:
+            saved = json.loads(state_file.read_text(encoding="utf-8"))
+            if isinstance(saved, dict):
+                if isinstance(saved.get("theme"), str):
+                    state["theme"] = saved["theme"]
+                if isinstance(saved.get("sticky_note"), str):
+                    state["sticky_note"] = saved["sticky_note"][:20_000]
+                if isinstance(saved.get("tasks"), list):
+                    clean_tasks = []
+                    for item in saved["tasks"][:200]:
+                        if isinstance(item, dict) and str(item.get("title", "")).strip():
+                            col = str(item.get("col", "todo"))
+                            if col not in ("todo", "doing", "done"):
+                                col = "todo"
+                            prio = str(item.get("priority", "normal"))
+                            if prio not in ("normal", "high"):
+                                prio = "normal"
+                            clean_tasks.append(
+                                {
+                                    "id": str(item.get("id") or int(time.time() * 1000)),
+                                    "title": str(item["title"]).strip()[:240],
+                                    "col": col,
+                                    "priority": prio,
+                                }
+                            )
+                    state["tasks"] = clean_tasks
+        except (OSError, json.JSONDecodeError):
+            pass
+    return state
+
+
+def save_os_state(workspace_dir: Path, patch_data: dict[str, Any]) -> dict[str, Any]:
+    current = load_os_state(workspace_dir)
+    if "theme" in patch_data and isinstance(patch_data["theme"], str):
+        allowed_themes = {"cyber", "nebula", "matrix", "sunset", "slate"}
+        if patch_data["theme"] in allowed_themes:
+            current["theme"] = patch_data["theme"]
+    if "sticky_note" in patch_data and isinstance(patch_data["sticky_note"], str):
+        current["sticky_note"] = patch_data["sticky_note"][:20_000]
+    if "tasks" in patch_data and isinstance(patch_data["tasks"], list):
+        clean_tasks = []
+        for idx, item in enumerate(patch_data["tasks"][:200]):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()
+            if not title:
+                continue
+            col = str(item.get("col", "todo"))
+            if col not in ("todo", "doing", "done"):
+                col = "todo"
+            prio = str(item.get("priority", "normal"))
+            if prio not in ("normal", "high"):
+                prio = "normal"
+            clean_tasks.append(
+                {
+                    "id": str(item.get("id") or f"t_{int(time.time()*1000)}_{idx}"),
+                    "title": title[:240],
+                    "col": col,
+                    "priority": prio,
+                }
+            )
+        current["tasks"] = clean_tasks
+
+    state_file = workspace_dir / OS_STATE_FILENAME
+    state_file.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    return current
+
+
+def list_all_files_flat(workspace_dir: Path, max_items: int = 250) -> list[dict[str, Any]]:
+    """Return a flat list of workspace files for quick Ctrl+K search in WiGi OS."""
+    results: list[dict[str, Any]] = []
+    base = workspace_dir.resolve()
+    if not base.exists():
+        return results
+
+    skip_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+    for root, dirs, files in os.walk(base):
+        dirs[:] = sorted(d for d in dirs if d not in skip_dirs and not d.startswith(".wigi"))
+        for fname in sorted(files):
+            if fname in HIDDEN_SYSTEM_FILES or fname.startswith(".wigi_run_"):
+                continue
+            fpath = Path(root) / fname
+            rel = to_rel_posix(workspace_dir, fpath)
+            results.append({"name": fname, "path": rel})
+            if len(results) >= max_items:
+                return results
+    return results
+
+
+def list_host_processes(limit: int = 18) -> list[dict[str, str]]:
+    """Return top running processes on the host machine for the OS System Monitor."""
+    procs: list[dict[str, str]] = []
+    try:
+        if os.name == "nt":
+            res = subprocess.run(
+                ["tasklist", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            for ln in res.stdout.splitlines()[:limit]:
+                parts = [p.strip('"') for p in ln.split('","')]
+                if len(parts) >= 5:
+                    procs.append({"pid": parts[1], "cpu": "—", "mem": parts[4], "command": parts[0]})
+        else:
+            res = subprocess.run(
+                ["ps", "-eo", "pid,pcpu,pmem,comm", "--sort=-pcpu"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            lines = res.stdout.splitlines()
+            for ln in lines[1 : limit + 1]:
+                cols = ln.strip().split(None, 3)
+                if len(cols) == 4:
+                    procs.append({"pid": cols[0], "cpu": cols[1] + "%", "mem": cols[2] + "%", "command": cols[3]})
+    except Exception:
+        pass
+    return procs
+
+
+def create_project_template(workspace_dir: Path, kind: str, name: str) -> dict[str, Any]:
+    """Scaffold a ready-to-work project inside the server workspace."""
+    clean_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", name.strip()).strip("-")
+    if not clean_name:
+        raise ValueError("Вкажи коректну назву проєкту.")
+    proj_dir = resolve_safe_path(workspace_dir, clean_name)
+    if proj_dir.exists():
+        raise ValueError(f"Папка '{clean_name}' вже існує.")
+    proj_dir.mkdir(parents=True, exist_ok=True)
+
+    if kind == "html-app":
+        (proj_dir / "index.html").write_text(
+            f"""<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>{clean_name}</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="box">
+    <h1>⚡ {clean_name}</h1>
+    <p>Живий HTML/JS додаток, запущений прямо із середовища сервера WiGi OS.</p>
+    <button id="actBtn">Натисни для тесту</button>
+    <div id="out"></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
+""",
+            encoding="utf-8",
+        )
+        (proj_dir / "style.css").write_text(
+            """body { font-family: system-ui, sans-serif; background: #0b1220; color: #e2e8f0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+.box { background: #131e33; border: 1px solid #283a5e; border-radius: 14px; padding: 28px; max-width: 440px; text-align: center; }
+button { background: #38bdf8; color: #041321; border: none; padding: 10px 18px; border-radius: 9px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+#out { margin-top: 14px; color: #86efac; font-family: monospace; }
+""",
+            encoding="utf-8",
+        )
+        (proj_dir / "app.js").write_text(
+            """let clicks = 0;
+document.getElementById("actBtn").addEventListener("click", () => {
+  clicks += 1;
+  document.getElementById("out").textContent = `Кліків: ${clicks} • Час: ${new Date().toLocaleTimeString()}`;
+});
+""",
+            encoding="utf-8",
+        )
+        entry = f"{clean_name}/index.html"
+    else:
+        (proj_dir / "main.py").write_text(
+            f"""#!/usr/bin/env python3
+\"\"\"Робочий Python-проєкт: {clean_name}\"\"\"
+
+from datetime import datetime
+from pathlib import Path
+import json
+
+
+def run() -> None:
+    report = {{
+        "project": "{clean_name}",
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "cwd": str(Path.cwd()),
+    }}
+    print("=== Звіт виконання проєкту ===")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    run()
+""",
+            encoding="utf-8",
+        )
+        (proj_dir / "README.md").write_text(
+            f"# {clean_name}\n\nPython-проєкт створено у середовищі **WiGi OS**.\n",
+            encoding="utf-8",
+        )
+        entry = f"{clean_name}/main.py"
+
+    return {
+        "name": clean_name,
+        "path": to_rel_posix(workspace_dir, proj_dir),
+        "entry": entry,
+        "kind": kind,
     }
