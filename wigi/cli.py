@@ -192,13 +192,14 @@ def run_server_blocking(
     print()
     print(f"{GREEN}{BOLD}------------------------------------------------------------{RESET}")
     print(f"  {GREEN}●{RESET} {BOLD}Сервер активний:{RESET} {updated.name}")
-    print(f"  {BOLD}Локально (цей ноут):{RESET}  http://127.0.0.1:{port}")
+    print(f"  {BOLD}Браузер (цей ноут):{RESET}   http://localhost:{port}")
     print(f"  {BOLD}У локальній мережі:{RESET}   http://{lan_ip}:{port}")
     print(f"  {BOLD}Папка середовища:{RESET}     {workspace_dir}")
+    print(f"  {BOLD}Можливості панелі:{RESET}    Файли/Код • Термінал/Python • Git/GitHub • ENV")
     print(f"{GREEN}{BOLD}------------------------------------------------------------{RESET}")
     print(f"  {DIM}{return_hint}{RESET}\n")
 
-    httpd = WiGiHTTPServer((host, port), updated, workspace_dir)
+    httpd = WiGiHTTPServer((host, port), updated, workspace_dir, store=store)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -306,6 +307,75 @@ def flow_select_and_start(store: ServerStore) -> None:
     run_server_blocking(store, selected)
 
 
+def flow_manage_server(store: ServerStore) -> None:
+    servers = store.list_servers()
+    selected = _select_server_from_list(servers, "Керування сервером")
+    if selected is None:
+        return
+
+    if not _prompt_verify_password(selected):
+        return
+
+    ws_path = store.ensure_workspace(selected)
+    print(f"\n  {BOLD}Сервер:{RESET} {selected.name}  {DIM}(ID: {selected.id}, порт: {selected.port}){RESET}")
+    print(f"  {BOLD}Папка:{RESET}  {ws_path}")
+    if selected.description:
+        print(f"  {BOLD}Опис:{RESET}   {selected.description}")
+
+    print(f"\n  {BOLD}Дії з сервером:{RESET}")
+    print(f"    {CYAN}[1]{RESET} Перейменувати / змінити опис")
+    print(f"    {CYAN}[2]{RESET} Змінити пароль")
+    print(f"    {CYAN}[3]{RESET} Змінити порт")
+    print(f"    {CYAN}[4]{RESET} Клонувати сервер (створити копію середовища)")
+    print(f"    {CYAN}[0]{RESET} Назад")
+
+    sub = prompt_line("\n  Вибір > ")
+    if sub == "1":
+        new_name = prompt_line(f"  Нова назва [{selected.name}]: ") or selected.name
+        new_desc = prompt_line(f"  Опис [{selected.description}]: ")
+        try:
+            updated = store.rename_server(
+                selected.id,
+                new_name=new_name,
+                description=new_desc if new_desc else selected.description,
+            )
+            print(f"  {GREEN}✓ Оновлено назву сервера: '{updated.name}'.{RESET}")
+        except ValueError as exc:
+            print(f"  {RED}✗ {exc}{RESET}")
+    elif sub == "2":
+        new_pw = read_password("  Новий пароль сервера: ")
+        if not new_pw:
+            print(f"  {YELLOW}Пароль не може бути порожнім.{RESET}")
+            return
+        store.change_password(selected.id, new_pw)
+        print(f"  {GREEN}✓ Пароль сервера '{selected.name}' змінено.{RESET}")
+    elif sub == "3":
+        raw_port = prompt_line(f"  Новий порт (поточний {selected.port}): ")
+        if raw_port.isdigit() and 1 <= int(raw_port) <= 65535:
+            store.change_port(selected.id, int(raw_port))
+            print(f"  {GREEN}✓ Новий порт збережено: {raw_port}.{RESET}")
+        else:
+            print(f"  {RED}✗ Некоректний порт.{RESET}")
+    elif sub == "4":
+        clone_name = prompt_line(f"  Назва для копії (напр. {selected.name}-copy): ")
+        if not clone_name:
+            return
+        clone_pw = read_password("  Пароль для копії сервера: ")
+        if not clone_pw:
+            print(f"  {RED}✗ Пароль не може бути порожнім.{RESET}")
+            return
+        try:
+            cloned = store.clone_server(
+                source_id=selected.id,
+                new_name=clone_name,
+                new_password=clone_pw,
+                port=find_free_port(selected.port + 1),
+            )
+            print(f"  {GREEN}✓ Створено копію сервера '{cloned.name}' (порт {cloned.port}).{RESET}")
+        except ValueError as exc:
+            print(f"  {RED}✗ {exc}{RESET}")
+
+
 def flow_delete_server(store: ServerStore) -> None:
     servers = store.list_servers()
     selected = _select_server_from_list(servers, "Видалення сервера")
@@ -339,7 +409,8 @@ def run_interactive_menu(store: ServerStore) -> int:
             print(f"    {CYAN}[1]{RESET} Створити новий сервер (назва + пароль)")
             print(f"    {CYAN}[2]{RESET} Вибрати вже створений сервер")
             if servers:
-                print(f"    {CYAN}[3]{RESET} Видалити сервер")
+                print(f"    {CYAN}[3]{RESET} Керування сервером (назва / пароль / порт / клон)")
+                print(f"    {CYAN}[4]{RESET} Видалити сервер")
             print(f"    {CYAN}[0]{RESET} Вихід")
 
             choice = prompt_line("\n  Твій вибір > ")
@@ -349,12 +420,14 @@ def run_interactive_menu(store: ServerStore) -> int:
             elif choice == "2":
                 flow_select_and_start(store)
             elif choice == "3" and servers:
+                flow_manage_server(store)
+            elif choice == "4" and servers:
                 flow_delete_server(store)
             elif choice in ("0", "q", "exit", "вихід"):
                 print(f"\n  {DIM}До зустрічі!{RESET}")
                 return 0
             else:
-                print(f"  {YELLOW}Обери пункт меню (1, 2{', 3' if servers else ''} або 0).{RESET}")
+                print(f"  {YELLOW}Обери пункт меню (1, 2{', 3, 4' if servers else ''} або 0).{RESET}")
         except (KeyboardInterrupt, EOFError):
             print(f"\n\n  {DIM}Вихід із терміналу WiGi.{RESET}")
             return 0
