@@ -182,10 +182,16 @@ class TestHTTPServerFullAPI(unittest.TestCase):
             try:
                 base_url = f"http://127.0.0.1:{port}"
 
-                # HEAD / healthcheck
+                # HEAD / and GET /os healthcheck
                 head_req = urllib.request.Request(f"{base_url}/", method="HEAD")
                 with urllib.request.urlopen(head_req) as resp:
                     self.assertEqual(resp.status, 200)
+
+                with urllib.request.urlopen(f"{base_url}/os") as os_resp:
+                    os_html = os_resp.read().decode("utf-8")
+                    self.assertEqual(os_resp.status, 200)
+                    self.assertIn("WiGi OS", os_html)
+                    self.assertIn("Code Studio", os_html)
 
                 # Unauthenticated /api/files -> 401
                 with self.assertRaises(urllib.error.HTTPError) as unauth_ctx:
@@ -231,7 +237,7 @@ class TestHTTPServerFullAPI(unittest.TestCase):
                 self.assertTrue(py_res["ok"])
                 self.assertEqual(py_res["stdout"].strip(), "42")
 
-                # Shell exec via API
+                # Shell exec via API + stateful cd inside workspace
                 sh_res = post_json("/api/exec", {"command": "echo wigi-ok"})
                 self.assertEqual(sh_res["stdout"].strip(), "wigi-ok")
 
@@ -240,6 +246,34 @@ class TestHTTPServerFullAPI(unittest.TestCase):
                 self.assertTrue(git_res["ok"])
                 repos_res = get_json("/api/git/repos")
                 self.assertEqual(len(repos_res["repos"]), 1)
+
+                cd_res = post_json("/api/exec", {"command": "cd demo-repo"})
+                self.assertEqual(cd_res["cwd"], "demo-repo")
+
+                # WiGi OS state, templates, search, processes, and /workspace/ static serving
+                os_st = post_json(
+                    "/api/os/state",
+                    {
+                        "theme": "nebula",
+                        "sticky_note": "My OS note",
+                        "tasks": [{"id": "1", "title": "Ship OS", "col": "doing", "priority": "high"}],
+                    },
+                )
+                self.assertTrue(os_st["ok"])
+                self.assertEqual(os_st["state"]["theme"], "nebula")
+
+                tpl = post_json("/api/os/template", {"kind": "html-app", "name": "live-ui"})
+                self.assertTrue(tpl["ok"])
+                self.assertEqual(tpl["entry"], "live-ui/index.html")
+
+                with urllib.request.urlopen(f"{base_url}/workspace/live-ui/index.html?token={token}") as w_resp:
+                    self.assertEqual(w_resp.status, 200)
+                    self.assertIn("live-ui", w_resp.read().decode("utf-8"))
+
+                procs = get_json("/api/os/processes")
+                self.assertTrue(procs["ok"])
+                search_res = get_json("/api/os/search")
+                self.assertTrue(any(f["path"] == "live-ui/index.html" for f in search_res["files"]))
 
                 # Update server settings via API & check persistence
                 cfg_res = post_json(
