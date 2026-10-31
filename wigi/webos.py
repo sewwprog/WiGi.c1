@@ -144,6 +144,17 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       color: #05101e;
     }}
 
+    .app-badge {{ display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:27%;color:#f8fafc;border:1px solid rgba(255,255,255,.3);box-shadow:inset 0 1px 2px rgba(255,255,255,.34),inset 0 -5px 12px rgba(1,12,29,.25),0 9px 19px rgba(0,0,0,.38);transform:rotate(-3deg); }}
+    .app-badge svg {{ filter:drop-shadow(0 2px 2px rgba(0,0,0,.3));transform:rotate(3deg); }}
+    .tiny-icon {{ display:inline-flex;align-items:center;color:#7dd3fc; }}
+    .site-card {{ background:linear-gradient(145deg,#18273d,#101a2b);border:1px solid var(--border);border-radius:16px;padding:17px;display:flex;flex-direction:column;gap:11px; }}
+    .site-card:hover {{ border-color:var(--border-active); }}
+    .site-form input,.site-form select {{ min-width:0;flex:1; }}
+    .site-stat {{ font-size:11px;color:var(--muted);background:#0b1424;padding:5px 8px;border-radius:7px; }}
+    .br-tabs {{ display:flex;gap:3px;overflow:auto;background:#0a1221;padding:5px 8px;min-height:37px; }}
+    .br-tab {{ border:1px solid var(--border);background:#16233a;color:var(--muted);border-radius:7px 7px 0 0;padding:5px 10px;cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;font-size:12px; }}
+    .br-tab.active {{ background:#263954;color:#fff;border-color:#38bdf8; }}
+    .br-bookmarks {{ display:flex;gap:6px;overflow:auto;padding:5px 10px;background:#0c1829;border-bottom:1px solid var(--border);min-height:33px; }}
     /* Desktop Icons Grid */
     .desktop-icons {{
       position: absolute;
@@ -812,17 +823,40 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
     setInterval(tickClock, 1000);
     tickClock();
 
+    // Original vector iconography — consistent sculpted squircle + hand-drawn SVG strokes.
+    const ICON_PATHS = {{
+      code:'<path d="M8 7 3 12l5 5M16 7l5 5-5 5M14 4l-4 16"/>',
+      terminal:'<rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="m6 9 3 3-3 3m5 0h6"/>',
+      files:'<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 11h18"/>',
+      git:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="7" cy="18" r="2"/><path d="M6 8v6a4 4 0 0 0 4 4M18 9v1a5 5 0 0 1-5 5h-3"/>',
+      kanban:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18m6-18v18M5 8h2m4 2h2m4-2h2m-8 6h2"/>',
+      notes:'<path d="M6 3h9l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v5h4M8 12h8M8 16h6"/>',
+      browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"/>',
+      sites:'<path d="M3 9 12 3l9 6v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 9l9 6 9-6M12 15v6"/>',
+      monitor:'<rect x="2.5" y="4" width="19" height="15" rx="2"/><path d="M7 12h2l2-4 2 8 2-4h2M9 22h6m-3-3v3"/>',
+      settings:'<circle cx="12" cy="12" r="3"/><path d="M10 2h4l.6 2.4 2 .8 2.1-1.2 2.8 2.8-1.2 2.1.8 2L23 11v3l-2.4.6-.8 2 1.2 2.1-2.8 2.8-2.1-1.2-2 .8L14 23h-4l-.6-2.4-2-.8-2.1 1.2-2.8-2.8 1.2-2.1-.8-2L1 14v-3l2.4-.6.8-2L3 6.3l2.8-2.8 2.1 1.2 2-.8z"/>',
+      file:'<path d="M6 2h9l4 4v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM15 2v5h4"/>',
+      image:'<rect x="2" y="3" width="20" height="18" rx="3"/><circle cx="8" cy="9" r="2"/><path d="m3 18 6-5 4 3 3-3 5 5"/>'
+    }};
+    function iconSvg(id, size=23) {{
+      return `<svg width="${{size}}" height="${{size}}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${{ICON_PATHS[id] || ICON_PATHS.file}}</svg>`;
+    }}
+    function iconBadge(app, size=44) {{
+      return `<span class="app-badge" style="width:${{size}}px;height:${{size}}px;background:${{app.bg}}">${{iconSvg(app.id, Math.round(size*.55))}}</span>`;
+    }}
+
     // App Registry
     const APPS = [
-      {{ id: "code", title: "Code Studio", icon: "💻", bg: "linear-gradient(135deg,#0284c7,#38bdf8)", w: 860, h: 540 }},
-      {{ id: "terminal", title: "Термінал", icon: "🖥", bg: "linear-gradient(135deg,#0f172a,#334155)", w: 680, h: 440, multi: true }},
-      {{ id: "files", title: "Провідник", icon: "📁", bg: "linear-gradient(135deg,#d97706,#fbbf24)", w: 720, h: 470 }},
-      {{ id: "git", title: "GitHub Studio", icon: "🐙", bg: "linear-gradient(135deg,#7c3aed,#a855f7)", w: 780, h: 510 }},
-      {{ id: "kanban", title: "Задачі Kanban", icon: "📋", bg: "linear-gradient(135deg,#059669,#34d399)", w: 820, h: 490 }},
-      {{ id: "notes", title: "Нотатки MD", icon: "📝", bg: "linear-gradient(135deg,#2563eb,#60a5fa)", w: 740, h: 470 }},
-      {{ id: "browser", title: "Веб-Ранер HTML", icon: "🌐", bg: "linear-gradient(135deg,#0891b2,#22d3ee)", w: 780, h: 520 }},
-      {{ id: "monitor", title: "Монітор ОС", icon: "📊", bg: "linear-gradient(135deg,#dc2626,#f87171)", w: 720, h: 480 }},
-      {{ id: "settings", title: "Налаштування", icon: "⚙️", bg: "linear-gradient(135deg,#475569,#94a3b8)", w: 660, h: 480 }},
+      {{ id: "code", title: "Code Studio", icon: "code", bg: "linear-gradient(135deg,#0284c7,#38bdf8)", w: 860, h: 540 }},
+      {{ id: "terminal", title: "Термінал", icon: "terminal", bg: "linear-gradient(135deg,#0f172a,#334155)", w: 680, h: 440, multi: true }},
+      {{ id: "files", title: "Провідник", icon: "files", bg: "linear-gradient(135deg,#d97706,#fbbf24)", w: 720, h: 470 }},
+      {{ id: "git", title: "GitHub Studio", icon: "git", bg: "linear-gradient(135deg,#7c3aed,#a855f7)", w: 780, h: 510 }},
+      {{ id: "kanban", title: "Задачі Kanban", icon: "kanban", bg: "linear-gradient(135deg,#059669,#34d399)", w: 820, h: 490 }},
+      {{ id: "notes", title: "Нотатки MD", icon: "notes", bg: "linear-gradient(135deg,#2563eb,#60a5fa)", w: 740, h: 470 }},
+      {{ id: "browser", title: "Браузер WiGi", icon: "browser", bg: "linear-gradient(135deg,#0891b2,#22d3ee)", w: 780, h: 520 }},
+      {{ id: "sites", title: "Сайти & Домени", icon: "sites", bg: "linear-gradient(145deg,#0d9488,#22d3ee 60%,#0284c7)", w: 900, h: 590 }},
+      {{ id: "monitor", title: "Монітор ОС", icon: "monitor", bg: "linear-gradient(135deg,#dc2626,#f87171)", w: 720, h: 480 }},
+      {{ id: "settings", title: "Налаштування", icon: "settings", bg: "linear-gradient(135deg,#475569,#94a3b8)", w: 660, h: 480 }},
     ];
 
     // Render Desktop Icons & Start Menu Grid
@@ -831,13 +865,13 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
     APPS.forEach(app => {{
       const d = document.createElement("div");
       d.className = "d-icon";
-      d.innerHTML = `<div class="d-icon-box" style="background:${{app.bg}}">${{app.icon}}</div><div class="d-icon-label">${{esc(app.title)}}</div>`;
+      d.innerHTML = `${{iconBadge(app)}}<div class="d-icon-label">${{esc(app.title)}}</div>`;
       d.addEventListener("click", () => openApp(app.id));
       dIconsEl.appendChild(d);
 
       const s = document.createElement("div");
       s.className = "sm-item";
-      s.innerHTML = `<div style="font-size:22px;">${{app.icon}}</div><div>${{esc(app.title)}}</div>`;
+      s.innerHTML = `${{iconBadge(app,38)}}<div>${{esc(app.title)}}</div>`;
       s.addEventListener("click", () => {{
         hidePopups();
         openApp(app.id);
@@ -907,7 +941,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         pill.type = "button";
         const isTop = w.el.classList.contains("focused") && !w.minimized;
         pill.className = "task-pill" + (isTop ? " active" : "");
-        pill.innerHTML = `<span>${{w.app.icon}}</span><span>${{esc(w.title)}}</span>`;
+        pill.innerHTML = `<span class="tiny-icon">${{iconSvg(w.app.id,17)}}</span><span>${{esc(w.title)}}</span>`;
         pill.addEventListener("click", () => {{
           if (isTop) {{
             w.minimized = true;
@@ -954,7 +988,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       el.style.top = top + "px";
       el.innerHTML = `
         <div class="win-bar">
-          <div class="win-title"><span>${{app.icon}}</span><span class="win-title-txt">${{esc(app.title)}}</span></div>
+          <div class="win-title"><span class="tiny-icon">${{iconSvg(app.id,18)}}</span><span class="win-title-txt">${{esc(app.title)}}</span></div>
           <div class="win-ctrls">
             <button class="w-btn snap-l" title="Прикріпити ліворуч (50%)" type="button">◧</button>
             <button class="w-btn snap-r" title="Прикріпити праворуч (50%)" type="button">◨</button>
@@ -1066,6 +1100,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       if (id === "kanban") return mountKanban(winRec, body);
       if (id === "notes") return mountNotesApp(winRec, body, params);
       if (id === "browser") return mountBrowserRunner(winRec, body, params);
+      if (id === "sites") return mountSitesStudio(winRec, body, params);
       if (id === "monitor") return mountSystemMonitor(winRec, body);
       if (id === "settings") return mountSettingsApp(winRec, body);
     }}
@@ -1091,9 +1126,13 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
           </div>
           <div class="ide-main">
             <div class="ide-tabs"></div>
-            <div class="ide-editor-wrap">
-              <div class="ide-gutter mono">1</div>
-              <textarea class="ide-textarea mono" spellcheck="false" placeholder="Вибери файл у дереві зліва або створи новий..." disabled></textarea>
+            <div class="toolbar" style="padding:5px 9px;min-height:33px;gap:5px;"><span class="muted" style="font-size:11px;">Швидкі блоки</span><button type="button" class="btn btn-ghost ide-snippet" data-snippet="html" style="padding:3px 6px;">HTML</button><button type="button" class="btn btn-ghost ide-snippet" data-snippet="section" style="padding:3px 6px;">Section</button><button type="button" class="btn btn-ghost ide-snippet" data-snippet="style" style="padding:3px 6px;">CSS</button><button type="button" class="btn btn-ghost ide-preview-toggle" style="padding:3px 6px;">◧ Прев'ю</button><span class="muted mono ide-cursor" style="margin-left:auto;font-size:11px;">Рядок 1 · Стовпець 1</span></div>
+            <div style="display:flex;flex:1;min-height:0;">
+              <div class="ide-editor-wrap" style="flex:1;min-width:0;">
+                <div class="ide-gutter mono">1</div>
+                <textarea class="ide-textarea mono" spellcheck="false" placeholder="Вибери файл у дереві зліва або створи новий..." disabled></textarea>
+              </div>
+              <iframe class="ide-preview hidden" sandbox="allow-scripts allow-forms allow-modals" title="Живе прев'ю" style="width:48%;border:0;border-left:1px solid var(--border);background:white;"></iframe>
             </div>
             <div class="ide-console mono">Готово. Відкрий .py файл для запуску на сервері або .html для живого прев'ю.</div>
           </div>
@@ -1110,6 +1149,31 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       const gutterEl = body.querySelector(".ide-gutter");
       const areaEl = body.querySelector(".ide-textarea");
       const outEl = body.querySelector(".ide-console");
+      const previewEl = body.querySelector(".ide-preview");
+      const cursorEl = body.querySelector(".ide-cursor");
+      let previewTimer;
+      function refreshPreview() {{
+        if (previewEl.classList.contains('hidden') || !/\.html?$/i.test(activePath)) return;
+        // srcdoc renders unsaved edits. base resolves site CSS/JS/images through public gateway.
+        const site = window.__wigiSites?.find(s=>activePath.startsWith(s.folder+'/'));
+        const base = site ? `${{location.origin}}${{ROOT}}/s/${{encodeURIComponent(site.domain)}}/${{activePath.slice(site.folder.length+1).replace(/[^/]*$/, '')}}` : `${{location.origin}}${{ROOT}}/workspace/${{activePath.replace(/[^/]*$/, '')}}`;
+        previewEl.srcdoc = `<base href="${{esc(base)}}">` + areaEl.value;
+      }}
+      function updateCursor() {{
+        const before=areaEl.value.slice(0,areaEl.selectionStart).split('\\n');
+        cursorEl.textContent=`Рядок ${{before.length}} · Стовпець ${{before[before.length-1].length+1}}`;
+      }}
+      areaEl.addEventListener('click',updateCursor);
+      areaEl.addEventListener('keyup',updateCursor);
+      body.querySelector('.ide-preview-toggle').onclick=()=>{{
+        previewEl.classList.toggle('hidden');refreshPreview();
+      }};
+      const snippets={{html:'<!doctype html>\\n<html lang="uk">\\n<head><meta charset="utf-8"><title>Мій сайт</title></head>\\n<body>\\n  <h1>Привіт, WiGi!</h1>\\n</body>\\n</html>',section:'<section class="hero">\\n  <h2>Заголовок</h2>\\n  <p>Текст секції</p>\\n</section>',style:'<style>\\n  :root {{ color-scheme:dark; }}\\n  body {{ font-family:system-ui; }}\\n</style>'}};
+      body.querySelectorAll('.ide-snippet').forEach(btn=>btn.onclick=()=>{{
+        if(areaEl.disabled)return;const start=areaEl.selectionStart,end=areaEl.selectionEnd;
+        areaEl.setRangeText(snippets[btn.dataset.snippet],start,end,'end');areaEl.dispatchEvent(new Event('input'));areaEl.focus();
+      }});
+      api('api/sites').then(r=>{{window.__wigiSites=r.data.sites||[];refreshPreview();}}).catch(()=>{{}});
       const saveBtn = body.querySelector(".ide-save");
       const runPyBtn = body.querySelector(".ide-run-py");
       const runHtmlBtn = body.querySelector(".ide-run-html");
@@ -1123,7 +1187,8 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       }}
       areaEl.addEventListener("scroll", () => {{ gutterEl.scrollTop = areaEl.scrollTop; }});
       areaEl.addEventListener("input", () => {{
-        syncGutter();
+        syncGutter();updateCursor();
+        clearTimeout(previewTimer);previewTimer=setTimeout(refreshPreview,220);
         const t = openTabs.get(activePath);
         if (t) {{
           t.content = areaEl.value;
@@ -1186,7 +1251,8 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         saveBtn.disabled = false;
         runPyBtn.classList.toggle("hidden", !p.endsWith(".py"));
         runHtmlBtn.classList.toggle("hidden", !(p.endsWith(".html") || p.endsWith(".htm")));
-        syncGutter();
+        previewEl.classList.toggle('hidden', !/\.html?$/i.test(p));
+        syncGutter();updateCursor();refreshPreview();
         renderTabs();
       }}
 
@@ -1212,7 +1278,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         tab.dirty = false;
         renderTabs();
         toast(`Збережено ${{tab.name}}`);
-        loadTree(treeDir);
+        refreshPreview();loadTree(treeDir);
       }}
 
       async function loadTree(dir) {{
@@ -1377,18 +1443,37 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
           <label class="btn btn-ghost" style="cursor:pointer;">⬆ Завантажити<input class="fe-up-in" type="file" style="display:none;" /></label>
           <button class="btn btn-ghost fe-tpl-py" type="button">🐍 +Python проєкт</button>
           <button class="btn btn-ghost fe-tpl-html" type="button">🌐 +HTML додаток</button>
-          <span class="muted mono fe-path" style="font-size:12px; margin-left:auto;">/</span>
+          <button class="btn btn-ghost fe-view" type="button" title="Сітка / список">☷ Список</button>
+          <input type="text" class="fe-search" placeholder="⌕ Фільтр файлів" style="width:135px;" />
         </div>
+        <div class="fe-path mono" style="padding:5px 14px;font-size:11px;display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);"></div>
         <div class="fe-grid" style="padding:14px; display:grid; grid-template-columns:repeat(auto-fill,minmax(175px,1fr)); gap:10px; overflow-y:auto; flex:1; align-content:start;"></div>
       `;
       const grid = body.querySelector(".fe-grid");
+      let view = 'grid', allItems = [];
+      const search = body.querySelector('.fe-search');
+      function paint() {{
+        const q=search.value.toLowerCase();
+        grid.style.gridTemplateColumns=view==='grid'?'repeat(auto-fill,minmax(175px,1fr))':'1fr';
+        grid.querySelectorAll('[data-filter]').forEach(card=>{{card.style.display=card.dataset.filter.includes(q)?'flex':'none';card.style.flexDirection=view==='grid'?'column':'row';}});
+      }}
+      search.oninput=paint;
+      body.querySelector('.fe-view').onclick=()=>{{view=view==='grid'?'list':'grid';body.querySelector('.fe-view').textContent=view==='grid'?'☷ Список':'▦ Сітка';paint();}};
+      function breadcrumbs() {{
+        const bar=body.querySelector('.fe-path');bar.innerHTML='';
+        const parts=cur.split('/').filter(Boolean);
+        for(let i=0;i<=parts.length;i++){{
+          const btn=document.createElement('button');btn.className='btn btn-ghost';btn.type='button';btn.style.cssText='padding:2px 6px;font-size:11px';btn.textContent=i?'› '+parts[i-1]:'⌂ Робоча папка';
+          const target=parts.slice(0,i).join('/');btn.onclick=()=>load(target);bar.appendChild(btn);
+        }}
+      }}
 
       async function load(dir) {{
         const {{ data }} = await api("api/files?path=" + encodeURIComponent(dir || ""));
         if (!data.ok) return toast(data.error, true);
         cur = data.cwd || "";
         parent = data.parent || "";
-        body.querySelector(".fe-path").textContent = "/" + cur;
+        breadcrumbs();
         grid.innerHTML = "";
         if (!data.items.length) {{
           grid.innerHTML = '<div class="muted">Папка порожня</div>';
@@ -1396,8 +1481,9 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
         }}
         data.items.forEach(it => {{
           const card = document.createElement("div");
+          card.dataset.filter=it.name.toLowerCase();
           card.style.cssText = "background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:8px; cursor:pointer;";
-          const ic = it.type === "dir" ? (it.is_git ? "📦" : "📁") : (it.name.endsWith(".py") ? "🐍" : (it.name.endsWith(".html") ? "🌐" : (it.name.endsWith(".md") ? "📝" : "📄")));
+          const ic=iconSvg(it.type==='dir'?'files':/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(it.name)?'image':/\.html?$/i.test(it.name)?'browser':'file',24);
           card.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-size:22px;">${{ic}}</span>
@@ -1414,6 +1500,12 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
           `;
           const triggerOpen = () => {{
             if (it.type === "dir") return load(it.path);
+            if (/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(it.name)) {{
+              const url=`${{ROOT}}/api/files/download?path=${{encodeURIComponent(it.path)}}&token=${{encodeURIComponent(getToken())}}`;
+              const popup=window.open('','_blank');
+              if(popup){{popup.document.write('<body style="margin:0;background:#0b1020;display:grid;place-items:center;min-height:100vh"><img style="max-width:95vw;max-height:95vh;object-fit:contain" alt="Preview"></body>');popup.document.querySelector('img').src=url;}}
+              return;
+            }}
             if (it.name.endsWith(".html") || it.name.endsWith(".htm")) return openApp("browser", {{ file: it.path }});
             if (it.name.endsWith(".md")) return openApp("notes", {{ file: it.path }});
             return openApp("code", {{ file: it.path }});
@@ -1435,6 +1527,7 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
           }});
           grid.appendChild(card);
         }});
+        paint();
       }}
 
       body.querySelector(".fe-up").addEventListener("click", () => load(parent));
@@ -1713,59 +1806,124 @@ def render_webos_html(srv: "WiGiHTTPServer") -> str:
       loadMd(filePath);
     }}
 
-    // 7. WEB RUNNER (LIVE HTML APP PREVIEW)
+    // 7. WiGi BROWSER — multi-tab with built-in DNS for hosted domains.
     function mountBrowserRunner(winRec, body, params) {{
-      let curFile = params.file || "";
+      const tabs = []; let active = 0, hosted = [];
       body.innerHTML = `
-        <form class="toolbar br-form">
-          <button class="btn btn-ghost br-rel" type="button" title="Перезавантажити">↻</button>
-          <input class="br-in mono" type="text" style="flex:1;" placeholder="Шлях до HTML у середовищі (напр. my-web-app/index.html)" />
-          <button class="btn" type="submit">Відкрити</button>
-          <button class="btn btn-green br-new" type="button">+ Створити HTML-проєкт</button>
-          <button class="btn btn-ghost br-ext" type="button" title="У новій вкладці">↗</button>
+        <div class="br-tabs"></div>
+        <form class="toolbar br-form" style="gap:6px;">
+          <button class="btn btn-ghost br-back" type="button" title="Назад">←</button>
+          <button class="btn btn-ghost br-rel" type="button" title="Оновити">↻</button>
+          <input class="br-in mono" type="text" style="flex:1;min-width:130px;" placeholder="myshop.ua або web_demo/index.html" />
+          <button class="btn" type="submit">Перейти</button>
+          <button class="btn btn-ghost br-edit" type="button" title="Відкрити у Code Studio">✎ Код</button>
+          <button class="btn btn-ghost br-ext" type="button" title="У новій вкладці браузера">↗</button>
         </form>
-        <iframe class="br-frame" style="flex:1; border:none; background:#fff;"></iframe>
-      `;
-      const inp = body.querySelector(".br-in");
-      const frame = body.querySelector(".br-frame");
-
-      function buildUrl(rel) {{
-        const clean = rel.replace(/^\\/+/, "");
-        return `${{ROOT}}/workspace/${{clean}}?token=${{encodeURIComponent(getToken())}}&_t=${{Date.now()}}`;
+        <div class="br-bookmarks"><button type="button" class="btn btn-ghost br-add" style="padding:3px 8px;">+ Вкладка</button><button type="button" class="btn btn-ghost br-sites" style="padding:3px 8px;">Мої домени</button></div>
+        <div class="toolbar" style="padding:4px 10px;min-height:33px;">
+          <span class="muted" style="font-size:11px;">Екран:</span><button class="btn btn-ghost br-size" data-width="100%" type="button">Десктоп</button><button class="btn btn-ghost br-size" data-width="768px" type="button">Планшет</button><button class="btn btn-ghost br-size" data-width="390px" type="button">Телефон</button>
+          <span class="muted" style="font-size:11px;margin-left:auto;">WiGi DNS · локальна маршрутизація</span>
+        </div>
+        <div style="flex:1;display:flex;justify-content:center;overflow:auto;background:#080d17;padding:5px;"><iframe class="br-frame" sandbox="allow-scripts allow-forms allow-modals" style="height:100%;width:100%;border:none;background:#fff;transition:width .2s;border-radius:4px;"></iframe></div>`;
+      const inp=body.querySelector('.br-in'),frame=body.querySelector('.br-frame'),tabBar=body.querySelector('.br-tabs'),marks=body.querySelector('.br-bookmarks');
+      function siteMatch(host) {{ return hosted.find(s => s.domain===host || s.localhost_alias===host || 'www.'+s.domain===host); }}
+      function resolve(raw) {{
+        const value=(raw||'').trim(); if (!value) return {{ url:'', file:'', domain:'' }};
+        const bare=value.replace(/^https?:\/\//i,''); const host=bare.split('/')[0].split(':')[0].toLowerCase();
+        const site=siteMatch(host);
+        if (site) {{ const path=bare.slice(bare.indexOf('/') === -1 ? bare.length : bare.indexOf('/')); return {{ url:`${{ROOT}}/s/${{encodeURIComponent(site.domain)}}${{path || '/'}}`,file:site.entry,domain:site.domain }}; }}
+        if (/^\/s\//.test(value)) {{ const s=hosted.find(x=>value.startsWith('/s/'+x.domain+'/'));return {{url:ROOT+value,file:s?.entry||'',domain:s?.domain||''}}; }}
+        if (/^https?:\/\//i.test(value) || /^[\w-]+\.[a-z]{{2,}}(?:\/|$)/i.test(value)) return {{ url:/^https?:/i.test(value)?value:'http://'+value,file:'',domain:'' }};
+        const clean=value.replace(/^\/+/, '');
+        return {{ url:`${{ROOT}}/workspace/${{clean}}?token=${{encodeURIComponent(getToken())}}`,file:clean,domain:'' }};
       }}
-
-      function navigate(rel) {{
-        curFile = (rel || "").trim();
-        inp.value = curFile;
-        if (!curFile) {{
-          frame.srcdoc = `<body style="font-family:system-ui;background:#0d1424;color:#cbd5e1;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;max-width:420px;"><h2>🌐 Веб-Ранер WiGi OS</h2><p style="color:#94a3b8;line-height:1.5;">Запускає будь-які HTML/CSS/JS проєкти прямо із папки твого сервера. Натисни «+ Створити HTML-проєкт» зверху або вкажи шлях до .html файлу.</p></div></body>`;
-          return;
-        }}
-        frame.removeAttribute("srcdoc");
-        frame.src = buildUrl(curFile);
+      function renderTabs() {{
+        tabBar.innerHTML='';tabs.forEach((tab,i)=>{{ const btn=document.createElement('button');btn.type='button';btn.className='br-tab'+(active===i?' active':'');btn.textContent=(tab.domain?'◈ ':'')+(tab.address||'Нова вкладка')+'  ×';btn.onclick=e=>{{if(e.offsetX>btn.clientWidth-23 && tabs.length>1){{tabs.splice(i,1);active=Math.max(0,Math.min(active,tabs.length-1));show();}}else{{active=i;show();}}}};tabBar.appendChild(btn); }});
+        const add=document.createElement('button');add.type='button';add.className='br-tab';add.textContent='＋';add.onclick=()=>newTab('');tabBar.appendChild(add);
       }}
-
-      body.querySelector(".br-form").addEventListener("submit", (e) => {{
-        e.preventDefault();
-        navigate(inp.value);
-      }});
-      body.querySelector(".br-rel").addEventListener("click", () => navigate(inp.value));
-      body.querySelector(".br-ext").addEventListener("click", () => {{
-        if (inp.value.trim()) window.open(buildUrl(inp.value.trim()), "_blank");
-      }});
-      body.querySelector(".br-new").addEventListener("click", () => {{
-        createTemplateFlow("html-app");
-      }});
-
-      winRec.onParams = (p) => {{ if (p.file) navigate(p.file); }};
-
-      if (curFile) navigate(curFile);
-      else {{
-        api("api/os/search").then(({{ data }}) => {{
-          const htmlFile = (data.files || []).find(f => f.path.endsWith(".html"));
-          navigate(htmlFile ? htmlFile.path : "");
-        }}).catch(() => navigate(""));
+      function show() {{ const tab=tabs[active];if(!tab)return; inp.value=tab.domain?'🔒 https://'+tab.address:tab.address; renderTabs();frame.removeAttribute('srcdoc');if(tab.url)frame.src=tab.url;else frame.srcdoc='<body style="background:#101b30;color:#e2e8f0;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1>WiGi Browser</h1><p>Введи домен сайту або відкрий закладку.</p></div></body>'; }}
+      function navigate(address) {{
+        const raw=address.replace(/^🔒\s*/, '');
+        const result=resolve(raw);const tab=tabs[active];tab.address=result.domain?raw.replace(/^https?:\/\//i,''):raw;tab.url=result.url;tab.file=result.file;tab.domain=result.domain;show();
       }}
+      function newTab(address) {{ tabs.push({{address:'',url:'',domain:'',file:''}});active=tabs.length-1;navigate(address); }}
+      async function bookmarks() {{
+        try {{ const r=await api('api/sites'); hosted=r.data.sites||[];marks.querySelectorAll('.br-bookmark').forEach(x=>x.remove());hosted.forEach(s=>{{const b=document.createElement('button');b.type='button';b.className='btn btn-ghost br-bookmark';b.style.cssText='padding:3px 8px;font-size:11px;white-space:nowrap';b.textContent='◈ '+s.domain;b.onclick=()=>navigate(s.domain);marks.appendChild(b);}}); if(tabs.length)navigate(tabs[active].address); }} catch (_) {{}}
+      }}
+      body.querySelector('.br-form').onsubmit=e=>{{e.preventDefault();navigate(inp.value);}};
+      body.querySelector('.br-rel').onclick=()=>{{const t=tabs[active];frame.src=t.url?t.url+(t.url.includes('?')?'&':'?')+'_t='+Date.now():'';}};
+      body.querySelector('.br-back').onclick=()=>{{try{{frame.contentWindow.history.back();}}catch(_){{}}}};
+      body.querySelector('.br-add').onclick=()=>newTab('');body.querySelector('.br-sites').onclick=()=>openApp('sites');
+      body.querySelector('.br-edit').onclick=()=>{{const f=tabs[active].file;if(f)openApp('code',{{file:f}});else toast('Редагування доступне для сайтів WiGi та файлів робочої папки',true);}};
+      body.querySelector('.br-ext').onclick=()=>{{if(tabs[active].url) window.open(tabs[active].url,'_blank','noopener');}};
+      body.querySelectorAll('.br-size').forEach(b=>b.onclick=()=>{{frame.style.width=b.dataset.width;frame.style.flexShrink='0';body.querySelectorAll('.br-size').forEach(x=>x.style.color=x===b?'var(--accent)':'');}});
+      winRec.onParams=p=>{{if(p.domain||p.file)newTab(p.domain||p.file);}};
+      newTab(params.domain||params.file||'');bookmarks();
+    }}
+
+    // SITE STUDIO — create, edit and publish multi-file sites on custom domains.
+    function mountSitesStudio(winRec, body) {{
+      let sites = [], port = location.port || "80", lanIp = "127.0.0.1";
+      body.innerHTML = `
+        <div style="padding:18px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:17px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div><div style="font-size:20px;font-weight:800;">Сайти <span style="color:var(--accent)">&</span> Домени</div><div class="muted" style="font-size:12px;margin-top:4px;">Створюй файли · публікуй миттєво · відкривай через WiGi DNS</div></div>
+            <button type="button" class="btn btn-ghost site-refresh">↻ Оновити</button>
+          </div>
+          <form class="site-form" style="display:flex;flex-wrap:wrap;gap:8px;padding:16px;background:var(--panel-2);border:1px solid var(--border);border-radius:14px;">
+            <div style="width:100%;font-weight:700;font-size:13px;">+ Новий сайт</div>
+            <input name="domain" type="text" required placeholder="Домен · myshop.ua / studio.dev" />
+            <input name="title" type="text" placeholder="Назва сайту" />
+            <select name="template"><option value="landing">Лендінг</option><option value="store">Магазин + кошик</option><option value="portfolio">Портфоліо</option><option value="blog">Блог</option><option value="webapp">Web App</option><option value="blank">Порожній</option></select>
+            <input name="folder" type="text" placeholder="Існуюча папка (необов'язково)" title="Якщо в папці є index.html — опублікуємо ваші файли без перезапису" />
+            <button type="submit" class="btn btn-green">Створити та запустити →</button>
+            <div class="muted" style="width:100%;font-size:11px;">Немає папки? Згенеруємо HTML, CSS і JS. Є папка з index.html? Підключимо її без перезапису.</div>
+          </form>
+          <div class="site-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;"></div>
+          <div class="muted" style="font-size:11px;line-height:1.6;">WiGi DNS працює в браузері ОС. Для доступу до власного домену з інших пристроїв налаштуй DNS A → IP сервера (та HTTPS через reverse proxy), або скористайся публічним посиланням /s/домен/. Локально працює alias .localhost без DNS.</div>
+        </div>`;
+      const list = body.querySelector(".site-list");
+      function siteUrl(s) {{ return `${{ROOT}}/s/${{encodeURIComponent(s.domain)}}/`; }}
+      async function copyText(text) {{
+        try {{ await navigator.clipboard.writeText(text); toast("Скопійовано"); }}
+        catch (_) {{ prompt("Скопіюй:", text); }}
+      }}
+      async function refresh() {{
+        const {{ data }} = await api("api/sites");
+        if (!data.ok) return toast(data.error, true);
+        sites = data.sites || []; port = data.port; lanIp = data.lan_ip;
+        list.innerHTML = "";
+        if (!sites.length) list.innerHTML = '<div class="muted">Тут з’являться твої сайти. Створи перший вище ↑</div>';
+        sites.forEach(site => {{
+          const card = document.createElement("article"); card.className = "site-card";
+          card.innerHTML = `
+            <div style="display:flex;gap:10px;align-items:center;">${{iconBadge(APPS.find(a=>a.id==='sites'),38)}}<div style="min-width:0;flex:1"><strong>${{esc(site.title)}}</strong><div class="mono" style="color:var(--accent);font-size:12px;overflow:hidden;text-overflow:ellipsis;">${{esc(site.domain)}}</div></div><span class="site-stat" style="color:${{site.enabled ? '#4ade80' : '#fbbf24'}}">${{site.enabled ? '● Online' : '● Чернетка'}}</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;"><span class="site-stat">◉ ${{Number(site.visits||0)}} відвідувань</span><span class="site-stat">${{esc(site.template)}}</span><span class="site-stat mono">/${{esc(site.folder)}}</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;"><button type="button" class="btn site-open">↗ Відкрити</button><button type="button" class="btn btn-ghost site-edit">✎ Код</button><button type="button" class="btn btn-ghost site-copy">⧉ URL</button><button type="button" class="btn btn-ghost site-hosts">⌘ DNS</button><button type="button" class="btn btn-ghost site-toggle">${{site.enabled ? '⏸ Вимкнути' : '▶ Запустити'}}</button><button type="button" class="btn btn-danger site-delete">×</button></div>
+            <div class="muted mono" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;">Локально: http://${{esc(site.localhost_alias)}}:${{port}} · Публічно: /s/${{esc(site.domain)}}/</div>`;
+          card.querySelector('.site-open').onclick = () => openApp('browser', {{ domain:site.domain }});
+          card.querySelector('.site-edit').onclick = () => openApp('code', {{ dir:site.folder, file:site.entry }});
+          card.querySelector('.site-copy').onclick = () => copyText(new URL(siteUrl(site), location.href).href);
+          card.querySelector('.site-hosts').onclick = () => {{
+            const ip = lanIp && !lanIp.startsWith('127.') ? lanIp : '127.0.0.1';
+            const msg = `Реальний домен ${{site.domain}} потребує DNS A → ${{ip}} та відкритого порту ${{port}}. Для HTTPS налаштуй reverse proxy/TLS.\n\nLinux/WSL: echo '${{ip}} ${{site.domain}}' | sudo tee -a /etc/hosts\nWindows: додай '${{ip}} ${{site.domain}}' в C:\\Windows\\System32\\drivers\\etc\\hosts\n\nБез налаштувань: http://${{site.localhost_alias}}:${{port}}/ або ${{new URL(siteUrl(site), location.href).href}}`;
+            copyText(msg); alert(msg);
+          }};
+          card.querySelector('.site-toggle').onclick = async () => {{ const r = await api('api/sites/update',{{method:'POST',body:JSON.stringify({{id:site.id,enabled:!site.enabled}})}}); if (!r.data.ok) toast(r.data.error,true); else refresh(); }};
+          card.querySelector('.site-delete').onclick = async () => {{ if (!confirm(`Відв'язати домен ${{site.domain}}? Файли сайту залишаться на диску.`)) return; const r=await api('api/sites/delete',{{method:'POST',body:JSON.stringify({{id:site.id}})}}); if (!r.data.ok) toast(r.data.error,true); else refresh(); }};
+          list.appendChild(card);
+        }});
+      }}
+      body.querySelector('.site-form').onsubmit = async e => {{
+        e.preventDefault(); const form = e.currentTarget; const fields = Object.fromEntries(new FormData(form));
+        const r = await api('api/sites/create',{{ method:'POST',body:JSON.stringify(fields) }});
+        if (!r.data.ok) return toast(r.data.error,true);
+        form.reset(); toast('Сайт запущено: '+r.data.site.domain); await refresh();
+        openApp('code',{{ dir:r.data.site.folder,file:r.data.site.entry }});
+      }};
+      body.querySelector('.site-refresh').onclick=refresh;
+      winRec.onParams=refresh;
+      refresh();
     }}
 
     // 8. SYSTEM MONITOR & PROCESSES

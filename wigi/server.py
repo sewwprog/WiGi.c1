@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 from wigi.network import get_lan_ip, get_system_metrics
+from wigi import sites as sites_ops
 from wigi.storage import ServerProfile, ServerStore
 from wigi.webos import render_webos_html
 from wigi import workspace as ws_ops
@@ -236,6 +237,19 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(raw)
 
+    def _send_site_response(self, status: int, filename: str, raw: bytes) -> None:
+        mime, _ = mimetypes.guess_type(filename)
+        content_type = mime or "application/octet-stream"
+        if content_type.startswith("text/") and "charset=" not in content_type:
+            content_type += "; charset=utf-8"
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(raw)
+
     def _read_json_body(self) -> dict[str, Any] | None:
         length_str = self.headers.get("Content-Length", "0")
         try:
@@ -261,6 +275,49 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
+
+        # 1. Virtual Host routing by HTTP Host header (custom domains, *.localhost, *.nip.io)
+        host_hdr = self.headers.get("Host", "")
+        vhost_site = sites_ops.resolve_vhost_request(
+            self.server.workspace_dir,
+            host_hdr,
+            server_hostname=self.server.hostname,
+        )
+        if vhost_site is not None:
+            status_code, fname, raw_bytes = sites_ops.serve_site_file(
+                self.server.workspace_dir,
+                vhost_site,
+                parsed.path,
+            )
+            self._send_site_response(status_code, fname, raw_bytes)
+            return
+
+        # 2. Universal public site gateway: /s/<domain>/...
+        if parsed.path.startswith("/s/"):
+            rest = parsed.path[3:]
+            if "/" not in rest:
+                # Redirect /s/<domain> -> /s/<domain>/ so relative CSS/JS assets resolve cleanly
+                dom_only = rest.strip()
+                if dom_only:
+                    self.send_response(302)
+                    self.send_header("Location", f"/s/{quote(dom_only)}/")
+                    self.end_headers()
+                    return
+            dom_part, _, sub_path = rest.partition("/")
+            site = sites_ops.get_site_by_domain(self.server.workspace_dir, dom_part)
+            if site is None:
+                self._send_html(
+                    404,
+                    f"<!DOCTYPE html><html lang='uk'><body style='background:#090d16;color:#e2e8f0;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;'><div style='text-align:center;'><h2>Домен {html.escape(dom_part)} не знайдено</h2><p style='color:#94a3b8;'>Створи його у додатку «Сайти та Домени» в WiGi OS.</p></div></body></html>",
+                )
+                return
+            status_code, fname, raw_bytes = sites_ops.serve_site_file(
+                self.server.workspace_dir,
+                site,
+                sub_path,
+            )
+            self._send_site_response(status_code, fname, raw_bytes)
+            return
 
         if route == "/favicon.ico":
             self.send_response(204)
@@ -364,6 +421,20 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
         if route == "/api/git/repos":
             repos = ws_ops.list_git_repos(self.server.workspace_dir)
             self._send_json(200, {"ok": True, "repos": repos})
+            return
+
+        if route == "/api/sites":
+            port = self.server.server_address[1]
+            sites = sites_ops.list_sites(self.server.workspace_dir)
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "sites": sites,
+                    "port": port,
+                    "lan_ip": self.server.lan_ip,
+                },
+            )
             return
 
         if route == "/api/env":
@@ -569,6 +640,50 @@ class WiGiRequestHandler(BaseHTTPRequestHandler):
                 created = ws_ops.create_project_template(self.server.workspace_dir, kind=kind, name=name)
                 self.server.record_event("OS", f"Створено проєкт '{created['name']}' ({kind})")
                 self._send_json(200, {"ok": True, **created})
+                return
+
+            if route == "/api/sites/create":
+                domain = str(data.get("domain", ""))
+                title = str(data.get("title", ""))
+                template = str(data.get("template", "landing"))
+                folder = str(data.get("folder", ""))
+                accent = str(data.get("accent", "#38bdf8"))
+                site = sites_ops.create_site(
+                    self.server.workspace_dir,
+                    domain=domain,
+                    title=title,
+                    template=template,
+                    folder=folder,
+                    accent=accent,
+                )
+                self.server.record_event("DOMAIN", f"Запущено сайт '{site['title']}' на домені {site['domain']}")
+                self._send_json(200, {"ok": True, "site": site})
+                return
+
+            if route == "/api/sites/update":
+                site_id = str(data.get("id", ""))
+                new_dom = data.get("domain")
+                new_title = data.get("title")
+                enabled = data.get("enabled")
+                updated = sites_ops.update_site(
+                    self.server.workspace_dir,
+                    site_id=site_id,
+                    domain=str(new_dom) if new_dom is not None else None,
+                    title=str(new_title) if new_title is not None else None,
+                    enabled=bool(enabled) if enabled is not None else None,
+                )
+                state_lbl = "ON" if updated.get("enabled") else "OFF"
+                self.server.record_event("DOMAIN", f"Оновлено домен {updated['domain']} [{state_lbl}]")
+                self._send_json(200, {"ok": True, "site": updated})
+                return
+
+            if route == "/api/sites/delete":
+                site_id = str(data.get("id", ""))
+                delete_files = bool(data.get("delete_files", False))
+                ok_del = sites_ops.delete_site(self.server.workspace_dir, site_id=site_id, delete_files=delete_files)
+                if ok_del:
+                    self.server.record_event("DOMAIN", f"Видалено прив'язку домену ({site_id})")
+                self._send_json(200, {"ok": True, "deleted": ok_del})
                 return
 
             if route == "/api/sessions/revoke-others":
@@ -954,6 +1069,10 @@ def _render_index_html(srv: WiGiHTTPServer) -> str:
 
       <!-- AUTHENTICATED WORKSPACE -->
       <div id="appView" class="hidden">
+        <div style="margin:18px 0;padding:16px 19px;border:1px solid rgba(56,189,248,.35);border-radius:13px;background:linear-gradient(100deg,#12273a,#1c1740);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div><strong style="font-size:15px;">◈ Сайти та Домени</strong><div class="muted" style="font-size:12px;margin-top:4px;">Створюй HTML/CSS/JS сайти, керуй доменами та публікуй прямо з WiGi OS.</div></div>
+          <a href="os" class="btn" style="text-decoration:none;">Відкрити студію сайтів ↗</a>
+        </div>
         <div class="tabs">
           <button class="tab-btn active" data-tab="overview" type="button">Огляд системи</button>
           <button class="tab-btn" data-tab="files" type="button">Файли та Код</button>

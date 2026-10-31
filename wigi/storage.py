@@ -189,9 +189,12 @@ class ServerStore:
                 )
             try:
                 from wigi.workspace import create_project_template
+                from wigi.sites import create_site
 
                 if not (ws / "web_demo").exists():
                     create_project_template(ws, "html-app", "web_demo")
+                if not (ws / ".wigi_sites.json").exists():
+                    create_site(ws, domain="nexus.wigi", title="Nexus Studio", template="landing")
             except Exception:
                 pass
         return ws
