@@ -67,6 +67,7 @@ class ServerProfile:
     password_hash: str
     created_at: str
     last_started_at: str | None = None
+    description: str = ""
 
     def verify_password(self, password: str) -> bool:
         _, candidate_hash = hash_password(password, self.password_salt)
@@ -117,7 +118,23 @@ class ServerStore:
         profiles: list[ServerProfile] = []
         for item in self._load_raw():
             try:
-                profiles.append(ServerProfile(**item))
+                allowed = {
+                    k: v
+                    for k, v in item.items()
+                    if k
+                    in {
+                        "id",
+                        "name",
+                        "slug",
+                        "port",
+                        "password_salt",
+                        "password_hash",
+                        "created_at",
+                        "last_started_at",
+                        "description",
+                    }
+                }
+                profiles.append(ServerProfile(**allowed))
             except TypeError:
                 continue
         return profiles
@@ -137,22 +154,46 @@ class ServerStore:
 
     def ensure_workspace(self, profile: ServerProfile) -> Path:
         ws = self.workspaces_dir / profile.slug
+        is_new = not ws.exists()
         ws.mkdir(parents=True, exist_ok=True)
         meta_file = ws / "server.json"
+        meta = {
+            "id": profile.id,
+            "name": profile.name,
+            "slug": profile.slug,
+            "created_at": profile.created_at,
+            "description": profile.description,
+        }
         if not meta_file.exists():
-            meta = {
-                "id": profile.id,
-                "name": profile.name,
-                "slug": profile.slug,
-                "created_at": profile.created_at,
-            }
             meta_file.write_text(
                 json.dumps(meta, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+        if is_new:
+            starter_py = ws / "hello.py"
+            if not starter_py.exists():
+                starter_py.write_text(
+                    'import platform\nimport datetime\n\n'
+                    f'print("Привіт із сервера {profile.name}!")\n'
+                    'print("Система:", platform.system(), platform.release())\n'
+                    'print("Час:", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))\n',
+                    encoding="utf-8",
+                )
+            notes_md = ws / "notes.md"
+            if not notes_md.exists():
+                notes_md.write_text(
+                    f"# {profile.name}\n\nРобоче середовище сервера `{profile.slug}`.\n",
+                    encoding="utf-8",
+                )
         return ws
 
-    def create_server(self, name: str, password: str, port: int = 8000) -> ServerProfile:
+    def create_server(
+        self,
+        name: str,
+        password: str,
+        port: int = 8000,
+        description: str = "",
+    ) -> ServerProfile:
         clean_name = name.strip()
         if not clean_name:
             raise ValueError("Назва сервера не може бути порожньою.")
@@ -184,6 +225,7 @@ class ServerStore:
             password_hash=hash_hex,
             created_at=now_str,
             last_started_at=None,
+            description=description.strip(),
         )
 
         records = [asdict(s) for s in existing]
@@ -209,6 +251,99 @@ class ServerStore:
             self._save_raw([asdict(p) for p in profiles])
             self.ensure_workspace(updated)
         return updated
+
+    def rename_server(self, server_id: str, new_name: str, description: str | None = None) -> ServerProfile:
+        clean_name = new_name.strip()
+        if not clean_name:
+            raise ValueError("Нова назва не може бути порожньою.")
+
+        profiles = self.list_servers()
+        for p in profiles:
+            if p.id != server_id and p.name.strip().lower() == clean_name.lower():
+                raise ValueError(f"Сервер з назвою '{clean_name}' вже існує.")
+
+        target: ServerProfile | None = None
+        for p in profiles:
+            if p.id == server_id:
+                p.name = clean_name
+                if description is not None:
+                    p.description = description.strip()
+                target = p
+                break
+
+        if target is None:
+            raise ValueError("Сервер не знайдено.")
+
+        self._save_raw([asdict(p) for p in profiles])
+        return target
+
+    def change_password(self, server_id: str, new_password: str) -> ServerProfile:
+        if not new_password:
+            raise ValueError("Новий пароль не може бути порожнім.")
+
+        profiles = self.list_servers()
+        target: ServerProfile | None = None
+        for p in profiles:
+            if p.id == server_id:
+                salt_hex, hash_hex = hash_password(new_password)
+                p.password_salt = salt_hex
+                p.password_hash = hash_hex
+                target = p
+                break
+
+        if target is None:
+            raise ValueError("Сервер не знайдено.")
+
+        self._save_raw([asdict(p) for p in profiles])
+        return target
+
+    def change_port(self, server_id: str, new_port: int) -> ServerProfile:
+        if not (1 <= new_port <= 65535):
+            raise ValueError("Порт має бути в діапазоні 1..65535.")
+
+        profiles = self.list_servers()
+        target: ServerProfile | None = None
+        for p in profiles:
+            if p.id == server_id:
+                p.port = new_port
+                target = p
+                break
+
+        if target is None:
+            raise ValueError("Сервер не знайдено.")
+
+        self._save_raw([asdict(p) for p in profiles])
+        return target
+
+    def clone_server(
+        self,
+        source_id: str,
+        new_name: str,
+        new_password: str,
+        port: int = 8000,
+    ) -> ServerProfile:
+        src = self.get_by_id(source_id)
+        if src is None:
+            raise ValueError("Вихідний сервер не знайдено.")
+
+        cloned = self.create_server(
+            name=new_name,
+            password=new_password,
+            port=port,
+            description=src.description,
+        )
+        src_ws = self.workspaces_dir / src.slug
+        dst_ws = self.workspaces_dir / cloned.slug
+        if src_ws.exists():
+            for item in src_ws.iterdir():
+                if item.name == "server.json":
+                    continue
+                target_item = dst_ws / item.name
+                if item.is_dir():
+                    shutil.copytree(item, target_item, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, target_item)
+        return cloned
 
     def delete_server(self, server_id: str, remove_workspace: bool = True) -> bool:
         profiles = self.list_servers()
