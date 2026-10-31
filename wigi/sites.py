@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import html
+import ipaddress
 import json
 from pathlib import Path
 import re
@@ -29,16 +30,17 @@ _DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[
 TEMPLATE_CHOICES = ("landing", "store", "portfolio", "blog", "webapp", "blank")
 
 
-def normalize_domain(raw_domain: str) -> str:
+def normalize_domain(raw_domain: str, allow_single_label: bool = False) -> str:
     """Validate and normalize any custom domain like `myshop.ua` or `app.wigi`."""
     cleaned = raw_domain.strip().lower()
     cleaned = re.sub(r"^https?://", "", cleaned)
     cleaned = cleaned.split("/", 1)[0].split(":", 1)[0].strip(".")
     if not cleaned:
         raise ValueError("Вкажи доменне ім'я (наприклад: myshop.ua або project.dev).")
-    if "." not in cleaned:
+    if "." not in cleaned and not allow_single_label:
         cleaned = f"{cleaned}.wigi"
-    if not _DOMAIN_RE.match(cleaned) or _IPV4_RE.match(cleaned):
+    label_ok = bool(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", cleaned))
+    if (not _DOMAIN_RE.fullmatch(cleaned) and not (allow_single_label and label_ok)) or _IPV4_RE.fullmatch(cleaned):
         raise ValueError(
             f"Некоректний формат домену '{raw_domain}'. Приклад: myshop.ua, studio.dev, app.wigi"
         )
@@ -140,6 +142,18 @@ def record_site_visit(workspace_dir: Path, site_id: str) -> None:
         _save_raw_sites(workspace_dir, sites)
 
 
+def is_site_accessible(site: dict[str, Any], peer_ip: str, forwarded_ip: str = "") -> bool:
+    """A local binding needs loopback at the socket and, if forwarded, at the original client."""
+    if not site.get("local_only", False):
+        return True
+    try:
+        return ipaddress.ip_address(peer_ip).is_loopback and (
+            not forwarded_ip or ipaddress.ip_address(forwarded_ip).is_loopback
+        )
+    except ValueError:
+        return False
+
+
 def create_site(
     workspace_dir: Path,
     domain: str,
@@ -147,8 +161,10 @@ def create_site(
     template: str = "landing",
     folder: str = "",
     accent: str = "#38bdf8",
+    entry_file: str = "",
+    local_only: bool = False,
 ) -> dict[str, Any]:
-    clean_domain = normalize_domain(domain)
+    clean_domain = normalize_domain(domain, allow_single_label=bool(entry_file.strip()))
     sites = list_sites(workspace_dir)
     for existing in sites:
         if existing["domain"].lower() == clean_domain:
@@ -159,26 +175,40 @@ def create_site(
         tpl = "landing"
 
     slug = domain_to_slug(clean_domain)
-    rel_folder = folder.strip().strip("/\\") or f"sites/{slug}"
-    target_dir = resolve_safe_path(workspace_dir, rel_folder)
-    if target_dir == workspace_dir.resolve() or any(part.startswith('.') for part in Path(rel_folder).parts):
-        raise ValueError("Для сайту обери окрему публічну папку без прихованих системних файлів.")
+    # Selecting an HTML file mounts that exact file as /, without creating or copying it.
+    if entry_file.strip():
+        chosen = resolve_safe_path(workspace_dir, entry_file)
+        rel_entry = to_rel_posix(workspace_dir, chosen)
+        if (not chosen.is_file() or chosen.suffix.lower() not in (".html", ".htm")
+                or not rel_entry or any(part.startswith(".") for part in Path(rel_entry).parts)):
+            raise ValueError("Обери існуючий HTML-файл у робочій папці сервера.")
+        target_dir = chosen.parent
+        tpl = "file"
+        local_only = True  # file bindings are always private to this machine
+    else:
+        rel_folder = folder.strip().strip("/\\") or f"sites/{slug}"
+        target_dir = resolve_safe_path(workspace_dir, rel_folder)
+        if target_dir == workspace_dir.resolve() or any(part.startswith('.') for part in Path(rel_folder).parts):
+            raise ValueError("Для сайту обери окрему публічну папку без прихованих системних файлів.")
+        chosen = target_dir / "index.html"
+
     candidate_alias = build_localhost_alias(clean_domain)
     if any(candidate_alias == old.get("localhost_alias") or clean_domain == old.get("localhost_alias") for old in sites):
         raise ValueError("Локальний alias цього домену вже зайнято.")
-    target_dir.mkdir(parents=True, exist_ok=True)
+    if not entry_file.strip():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        if not chosen.exists():
+            _scaffold_site_files(target_dir, clean_domain, title.strip() or clean_domain, tpl, accent=accent)
 
     clean_title = title.strip() or clean_domain
-    if not (target_dir / "index.html").exists():
-        _scaffold_site_files(target_dir, clean_domain, clean_title, tpl, accent=accent)
-
     site_record = {
         "id": "site_" + secrets.token_hex(4),
         "domain": clean_domain,
         "localhost_alias": build_localhost_alias(clean_domain),
         "title": clean_title,
         "folder": to_rel_posix(workspace_dir, target_dir),
-        "entry": to_rel_posix(workspace_dir, target_dir / "index.html"),
+        "entry": to_rel_posix(workspace_dir, chosen),
+        "local_only": local_only,
         "template": tpl,
         "accent": accent,
         "enabled": True,
@@ -207,7 +237,7 @@ def update_site(
         raise ValueError("Сайт не знайдено.")
 
     if domain is not None and domain.strip():
-        new_dom = normalize_domain(domain)
+        new_dom = normalize_domain(domain, allow_single_label=target.get("template") == "file")
         for other in sites:
             if other.get("id") != site_id and other.get("domain") == new_dom:
                 raise ValueError(f"Домен '{new_dom}' вже використовується.")
@@ -240,7 +270,7 @@ def delete_site(workspace_dir: Path, site_id: str, delete_files: bool = False) -
         return False
 
     _save_raw_sites(workspace_dir, remaining)
-    if delete_files and target.get("folder"):
+    if delete_files and target.get("folder") and target.get("template") != "file":
         try:
             folder_path = resolve_safe_path(workspace_dir, str(target["folder"]))
             if folder_path != workspace_dir.resolve() and folder_path.exists():
@@ -267,7 +297,7 @@ def serve_site_file(workspace_dir: Path, site: dict[str, Any], sub_path: str) ->
     if any(part.startswith(".") for part in Path(rel).parts) or "\\" in rel:
         return 404, "404.html", b"Not found"
     try:
-        cand = resolve_safe_path(site_root, rel) if rel else (site_root / "index.html")
+        cand = resolve_safe_path(site_root, rel) if rel else resolve_safe_path(workspace_dir, str(site["entry"]))
     except ValueError:
         return 404, "404.html", b"Not found"
 
@@ -282,6 +312,15 @@ def serve_site_file(workspace_dir: Path, site: dict[str, Any], sub_path: str) ->
 
     if site_root.resolve() not in cand.resolve().parents:
         return 404, "404.html", b"Not found"
+    # Single-file bindings expose only the chosen HTML plus ordinary static assets.
+    if site.get("template") == "file":
+        entry = resolve_safe_path(workspace_dir, str(site["entry"]))
+        static_extensions = {".css", ".js", ".mjs", ".json", ".png", ".jpg", ".jpeg", ".gif",
+                             ".webp", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".otf",
+                             ".mp3", ".mp4", ".webm", ".wav", ".avif"}
+        if cand.resolve() != entry and (site_root.resolve() == workspace_dir.resolve()
+                                        or cand.suffix.lower() not in static_extensions):
+            return 404, "404.html", b"Not found"
 
     if not cand.exists() or not cand.is_file():
         custom_404 = site_root / "404.html"
@@ -293,7 +332,7 @@ def serve_site_file(workspace_dir: Path, site: dict[str, Any], sub_path: str) ->
 <body><div><h1 style="font-size:52px;margin:0;color:#38bdf8;">404</h1><p style="color:#94a3b8;">Сторінку не знайдено на домені <strong>{html.escape(site['domain'])}</strong></p><a href="./" style="color:#38bdf8;">На головну</a></div></body></html>"""
         return 404, "404.html", not_found.encode("utf-8")
 
-    if cand.name == "index.html" and rel in ("", "index.html"):
+    if rel == "" or (cand.name == "index.html" and rel == "index.html"):
         record_site_visit(workspace_dir, str(site["id"]))
 
     return 200, cand.name, cand.read_bytes()
