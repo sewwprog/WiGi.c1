@@ -119,7 +119,11 @@ class TestHTTPServerAuth(unittest.TestCase):
             try:
                 base_url = f"http://127.0.0.1:{port}"
 
-                # 1. Public info
+                # 1. Public info + HEAD /
+                head_req = urllib.request.Request(f"{base_url}/", method="HEAD")
+                with urllib.request.urlopen(head_req) as resp:
+                    self.assertEqual(resp.status, 200)
+
                 with urllib.request.urlopen(f"{base_url}/api/info") as resp:
                     info = json.loads(resp.read().decode("utf-8"))
                     self.assertTrue(info["online"])
