@@ -464,3 +464,22 @@ class TestSiteHosting(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=3)
+
+class TestDesktopMotion(unittest.TestCase):
+    def test_motion_setting_is_persistent_and_type_safe(self) -> None:
+        from wigi.webos import render_webos_html
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ws = Path(tmpdir)
+            self.assertTrue(ws_ops.load_os_state(ws)['animations'])
+            self.assertFalse(ws_ops.save_os_state(ws, {'animations': False})['animations'])
+            self.assertFalse(ws_ops.load_os_state(ws)['animations'])
+            self.assertFalse(ws_ops.save_os_state(ws, {'animations': 'false'})['animations'])
+            self.assertTrue(ws_ops.save_os_state(ws, {'animations': True})['animations'])
+            class FakeServer:
+                hostname = 'localhost'
+                profile = type('Profile', (), {'name': 'Motion'})()
+            html = render_webos_html(FakeServer())
+            self.assertIn('prefers-reduced-motion: reduce', html)
+            self.assertIn('function minimizeWin', html)
+            self.assertIn('function morphWindow', html)
+            self.assertIn('motion-toggle', html)
